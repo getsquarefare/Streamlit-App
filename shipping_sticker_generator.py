@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 import streamlit as st
 import pandas as pd
 from pptx import Presentation
@@ -7,7 +6,6 @@ import copy
 from datetime import datetime
 from math import ceil
 from pptx.util import Pt
-
 
 def process_shipping_data(uploaded_shipping_file):
     df_shipping = pd.read_csv(uploaded_shipping_file)

@@ -2,4 +2,7 @@ pandas
 python-pptx
 streamlit
 pyarrow
-pptx.util
+requests
+pyairtable
+airtable
+openpyxl
