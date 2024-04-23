@@ -1,0 +1,8 @@
+pandas
+python-pptx
+streamlit
+pyarrow
+requests
+pyairtable
+airtable
+openpyxl
