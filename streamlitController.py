@@ -71,14 +71,14 @@ def main():
 # squarespace_to_airtable
     st.divider()
     st.header('SqaureSpace Reports Sync to Airtable 📑')
-    st.subheader("Step1: Products")
+    st.subheader("Step1: :orange[Products]")
     product_file = st.file_uploader(":green[Upload products<XX-XX-XXXX>.csv]", type="csv")
     
 
-    st.subheader("Step2: Profile")
+    st.subheader("Step2: :orange[Profile]")
     profile_file = st.file_uploader(":green[Upload profile.csv]", type="csv")
    
-    st.subheader("Step3: Orders")
+    st.subheader("Step3: orange[Orders]")
     order_file = st.file_uploader(":green[Upload orders.csv]", type="csv")
 
     col1, col2, col3 = st.columns(3)
