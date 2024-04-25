@@ -9,6 +9,8 @@ from squarespace_to_airtable import *
 def main():
     st.title(':orange[SqaureFare] Toolkits 🧰')
     st.divider()
+
+# shipping_sticker_generator
     st.header('Shipping Sticker Generator 🚚')
     current_date = datetime.now().strftime('%m%d%Y')
 
@@ -71,28 +73,25 @@ def main():
     st.header('SqaureSpace Reports Sync to Airtable 📑')
     st.subheader("Step1: Products")
     product_file = st.file_uploader(":green[Upload products<XX-XX-XXXX>.csv]", type="csv")
-    product_sync_button = st.button("Sync Products to Airtable ")
-    if product_sync_button:
-        product_final_df = product_data_clean(product_file)
-        #product_final_df.to_csv('detailed_cleaned_subscription_products_data.csv', index=False)
-        result = product_sync(product_final_df)
-        st.markdown(result)
-
     
+
     st.subheader("Step2: Profile")
     profile_file = st.file_uploader(":green[Upload profile.csv]", type="csv")
-    profile_sync_button = st.button("Sync Profile to Airtable ")
-    if profile_sync_button:
-        result = profile_sync(profile_file)
-        st.markdown(result)
-    
    
     st.subheader("Step3: Orders")
     order_file = st.file_uploader(":green[Upload orders.csv]", type="csv")
-    order_sync_button = st.button("Sync Orders to Airtable ")
-    if order_sync_button:
-        result = orders_sync(order_file)
-        st.markdown(result)
+
+    col1, col2, col3 = st.columns(3)
+    with col2:
+        sync_button = st.button("Sync All Tables to Airtable ")
+    if sync_button:
+        product_final_df = product_data_clean(product_file)
+        product_result = product_sync(product_final_df)
+        profile_result = profile_sync(profile_file)
+        orders_result = orders_sync(order_file)
+        st.markdown(f"Products: {product_result}")
+        st.markdown(f"Profile: {profile_result}")
+        st.markdown(f"Orders: {orders_result}")
 
 if __name__ == "__main__":
     main()
