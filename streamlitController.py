@@ -10,6 +10,31 @@ def main():
     st.title(':orange[SqaureFare] Toolkits 🧰')
     st.divider()
 
+# squarespace_to_airtable
+    st.divider()
+    st.header('SqaureSpace Reports Sync to Airtable 📑')
+    st.subheader("Step1: :orange[Products]")
+    product_file = st.file_uploader(":green[Upload products<XX-XX-XXXX>.csv]", type="csv")
+    
+
+    st.subheader("Step2: :orange[Profile]")
+    profile_file = st.file_uploader(":green[Upload profile.csv]", type="csv")
+   
+    st.subheader("Step3: :orange[Orders]")
+    order_file = st.file_uploader(":green[Upload orders.csv]", type="csv")
+
+    col1, col2, col3 = st.columns(3)
+    with col2:
+        sync_button = st.button("Sync All Tables to Airtable ")
+    if sync_button:
+        product_final_df = product_data_clean(product_file)
+        product_result = product_sync(product_final_df)
+        profile_result = profile_sync(profile_file)
+        orders_result = orders_sync(order_file)
+        st.markdown(f"Products: {product_result}")
+        st.markdown(f"Profile: {profile_result}")
+        st.markdown(f"Orders: {orders_result}")
+        
 # shipping_sticker_generator
     st.header('Shipping Sticker Generator 🚚')
     current_date = datetime.now().strftime('%m%d%Y')
@@ -68,30 +93,6 @@ def main():
             st.caption(":orange[This is the final table which is fed to sticker ppt, for review purpose]")
             st.dataframe(final_match_result_with_portion_df)
 
-# squarespace_to_airtable
-    st.divider()
-    st.header('SqaureSpace Reports Sync to Airtable 📑')
-    st.subheader("Step1: :orange[Products]")
-    product_file = st.file_uploader(":green[Upload products<XX-XX-XXXX>.csv]", type="csv")
-    
-
-    st.subheader("Step2: :orange[Profile]")
-    profile_file = st.file_uploader(":green[Upload profile.csv]", type="csv")
-   
-    st.subheader("Step3: :orange[Orders]")
-    order_file = st.file_uploader(":green[Upload orders.csv]", type="csv")
-
-    col1, col2, col3 = st.columns(3)
-    with col2:
-        sync_button = st.button("Sync All Tables to Airtable ")
-    if sync_button:
-        product_final_df = product_data_clean(product_file)
-        product_result = product_sync(product_final_df)
-        profile_result = profile_sync(profile_file)
-        orders_result = orders_sync(order_file)
-        st.markdown(f"Products: {product_result}")
-        st.markdown(f"Profile: {profile_result}")
-        st.markdown(f"Orders: {orders_result}")
 
 if __name__ == "__main__":
     main()
