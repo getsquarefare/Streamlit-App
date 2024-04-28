@@ -25,9 +25,18 @@ def main():
     uploaded_shipping_file = st.file_uploader(":green[Upload shippingdata.csv]", type="csv")
 
     if uploaded_shipping_file is not None:
-        df_shipping = process_shipping_data(uploaded_shipping_file)
-        generate_button = st.button("Generate Stickers")
+        try:
+            # Try to read the CSV file using the default encoding
+            df_shipping = pd.read_csv(uploaded_shipping_file)
+        except UnicodeDecodeError:
+            # If a UnicodeDecodeError occurs, attempt to read the file with a different encoding
+            uploaded_shipping_file.seek(0)  # Reset the file pointer to the beginning
+            df_shipping = pd.read_csv(uploaded_shipping_file, encoding='ISO-8859-1')
+        except Exception as e:
+            # Handle other potential exceptions
+             df_shipping = pd.read_csv(uploaded_shipping_file, encoding='utf-8', errors='ignore')
 
+        generate_button = st.button("Generate Stickers")
         if generate_button:
             # Load client servings from Google Sheets
             sheet_id = "1rorOBlH_K9qH4L39KehvI_rYGHo7agNVdCDisWydEj8"
