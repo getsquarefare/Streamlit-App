@@ -8,7 +8,7 @@ from math import ceil
 from pptx.util import Pt
 
 def process_shipping_data(uploaded_shipping_file):
-    df_shipping = pd.read_csv(uploaded_shipping_file)
+    df_shipping = pd.read_csv(uploaded_shipping_file,encoding_errors='ignore')
     df_shipping = df_shipping.astype(str)
     df_shipping['Shipping Phone'] = df_shipping['Shipping Phone'].str.replace(r'[()-]', '', regex=True)
     df_shipping.fillna('', inplace=True)
@@ -107,5 +107,3 @@ def generate_ppt(final_match_result_with_portion_df, prs):
                 last_slide_index += 1
                 count += 1
     return prs
-
-
