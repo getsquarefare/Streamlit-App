@@ -78,7 +78,7 @@ def main():
     st.subheader("Step2: :orange[Profile]")
     profile_file = st.file_uploader(":green[Upload profile.csv]", type="csv")
    
-    st.subheader("Step3: orange[Orders]")
+    st.subheader("Step3: :orange[Orders]")
     order_file = st.file_uploader(":green[Upload orders.csv]", type="csv")
 
     col1, col2, col3 = st.columns(3)
