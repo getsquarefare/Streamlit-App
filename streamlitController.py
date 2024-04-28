@@ -8,7 +8,7 @@ from squarespace_to_airtable import *
 # Streamlit app
 def main():
     st.title(':orange[SqaureFare] Toolkits 🧰')
-    st.divider()
+    
 
 # squarespace_to_airtable
     st.divider()
@@ -34,8 +34,9 @@ def main():
         st.markdown(f"Products: {product_result}")
         st.markdown(f"Profile: {profile_result}")
         st.markdown(f"Orders: {orders_result}")
-        
+
 # shipping_sticker_generator
+    st.divider()
     st.header('Shipping Sticker Generator 🚚')
     current_date = datetime.now().strftime('%m%d%Y')
 
