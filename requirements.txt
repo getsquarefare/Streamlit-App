@@ -6,3 +6,5 @@ requests
 pyairtable
 airtable
 openpyxl
+openai
+python-dotenv

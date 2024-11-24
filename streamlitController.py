@@ -2,59 +2,63 @@ import streamlit as st
 import pandas as pd
 from pptx import Presentation
 from datetime import datetime
+from portionController import *
 from shipping_sticker_generator import *
 from squarespace_to_airtable import *
+from clientservings_excel_output import *
+import time
 
 # Streamlit app
 def main():
     st.title(':orange[SqaureFare] Toolkits 🧰')
-    
+    current_date = datetime.now().strftime('%m%d%Y')
 
-# squarespace_to_airtable
+# portion algo trigger
     st.divider()
-    st.header('SqaureSpace Reports Sync to Airtable 📑')
-    st.subheader("Step1: :orange[Products]")
-    product_file = st.file_uploader(":green[Upload products<XX-XX-XXXX>.csv]", type="csv")
-    
+    st.header(':violet[Portion] Algorithm 🍽️')
+    st.markdown("⚠️ Please first confirm Open Orders in Airtable are reviewed and approved")
+    portion_generate_button = st.button("Yeh! Run Portioning Now")
+    if portion_generate_button:
+        # Display spinner and timer
+        with st.spinner('Running the portioning algorithm... 🕐'):
+            start_time = time.time()  # Record start time
+            meal_recommendation = MealRecommendation()
+            meal_recommendation.generate_recommendations()
+            end_time = time.time()
+            elapsed_time = end_time - start_time
 
-    st.subheader("Step2: :orange[Profile]")
-    profile_file = st.file_uploader(":green[Upload profile.csv]", type="csv")
-   
-    st.subheader("Step3: :orange[Orders]")
-    order_file = st.file_uploader(":green[Upload orders.csv]", type="csv")
+        st.success(f"Portioning algorithm completed in {elapsed_time:.2f} seconds! ✅")
 
-    col1, col2, col3 = st.columns(3)
-    with col2:
-        sync_button = st.button("Sync All Tables to Airtable ")
-    if sync_button:
-        product_final_df = product_data_clean(product_file)
-        product_result = product_sync(product_final_df)
-        profile_result = profile_sync(profile_file)
-        orders_result = orders_sync(order_file)
-        st.markdown(f"Products: {product_result}")
-        st.markdown(f"Profile: {profile_result}")
-        st.markdown(f"Orders: {orders_result}")
+# clientservings csv download
+    st.divider()
+    st.header(':green[ClientServings Excel] Generator 📑')
+    st.markdown("⚠️ Please first confirm the data in Airtable's clientservings table is correct")
+    clientservings_generate_button = st.button("Get ClientServings")
+    if clientservings_generate_button:
+        ac = new_database_access()
+        all_output = ac.consolidated_all_dishes_output()
+        ac.export_clientservings_to_excel(all_output)
 
 # shipping_sticker_generator
     st.divider()
-    st.header('Shipping Sticker Generator 🚚')
-    current_date = datetime.now().strftime('%m%d%Y')
+    st.header(':blue[Shipping Sticker] Generator 🚚')
+    
 
     # Display the shipping template file for double-checking
-    st.subheader("Step1: Upload Shipping Sticker Template")
+    st.subheader("Step1: Upload Shipping Sticker Template",divider="blue")
    
     # File uploader for the new template
-    new_template_file = st.file_uploader(":green[Upload Template]", type="pptx")
+    new_template_file = st.file_uploader(":blue[Upload template.ppt]", type="pptx")
     prs_file = Presentation(new_template_file)
     
-    st.subheader("Step2: Upload Shipping Data")
-    uploaded_shipping_file = st.file_uploader(":green[Upload shippingdata.csv]", type="csv")
+    st.subheader("Step2: Upload Shipping Data",divider="blue")
+    uploaded_shipping_file = st.file_uploader(":blue[Upload shippingdata.csv]", type="csv")
 
     if uploaded_shipping_file is not None:
         df_shipping = process_shipping_data(uploaded_shipping_file)
 
-        generate_button = st.button("Generate Stickers")
-        if generate_button:
+        sticker_generate_button = st.button("Generate Stickers")
+        if sticker_generate_button:
             # Load client servings from Google Sheets
             sheet_id = "1rorOBlH_K9qH4L39KehvI_rYGHo7agNVdCDisWydEj8"
             LA_sheet_name = "ClientServings-LA"
