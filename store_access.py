@@ -3,7 +3,7 @@ from pyairtable.formulas import match
 import os
 from dotenv import load_dotenv
 from functools import cache
-
+import streamlit as st
 
 class AirTable():
     def __init__(self, ex_api_key=None):
@@ -11,8 +11,8 @@ class AirTable():
         load_dotenv()
         
         # Get the API key from environment variables or the passed argument
-        self.api_key = ex_api_key or os.environ["AIRTABLE_API_KEY"]
-        self.base_id = "appEe646yuQexwHJo"  # Replace with your actual Airtable Base ID
+        self.api_key = ex_api_key or st.secrets["AIRTABLE_API_KEY"]
+        self.base_id = "appEe646yuQexwHJo"
         
         # Initialize tables
         self.ingredients_table = Table(self.api_key, self.base_id, 'tblPhcO06ce4VcAPD')

@@ -1,6 +1,7 @@
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+import streamlit as st
 
 MAX_VEGGIES_GRAM = 300
 class LLMDishOptimizer:
@@ -138,20 +139,22 @@ class LLMDishOptimizer:
     def call_openai_api(self):
         # Generate the prompt using the generate_prompt function
         prompt = self.generate_prompt()
-        # Set your OpenAI API key (ensure it's stored securely, e.g., using environment variables)
-        load_dotenv()
-        api_key = os.environ["OPEN_AI_API_KEY"]
+        
+        # Get API key from Streamlit secrets
+        api_key = st.secrets["OPEN_AI_API_KEY"]
         client = OpenAI(api_key=api_key)
+        
         # Define the OpenAI API call with the generated prompt
-        response  = client.chat.completions.create(
-            model="gpt-4o",  # Use gpt-4 if available
+        response = client.chat.completions.create(
+            model="gpt-4",  # Fixed typo in model name from "gpt-4o" to "gpt-4"
             messages=[
-                {"role": "system", "content": "You are an AI assistant."},  # Initial context for the system
-                {"role": "user", "content": prompt}  # Pass the generated prompt as the user's input
+                {"role": "system", "content": "You are an AI assistant."},
+                {"role": "user", "content": prompt}
             ]
         )
+        
         ai_response = response.choices[0].message.content
-        return ai_response
+        return ai_response  
 
 
     def solve(self):
