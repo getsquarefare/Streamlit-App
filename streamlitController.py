@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 from pptx import Presentation
 from datetime import datetime
-from portionController import *
-from shipping_sticker_generator import *
-from squarespace_to_airtable import *
-from clientservings_excel_output import *
+from portionController import MealRecommendation
+from shipping_sticker_generator import generate_ppt
+from clientservings_excel_output import AirTable
 import time
 
 # Streamlit app

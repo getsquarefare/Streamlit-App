@@ -1,10 +1,17 @@
 import copy
 import json
 import re
+import os
+import sys
 from tqdm import tqdm
 import pandas as pd
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Local imports
+from store_access import new_database_access
+from DishOptimizerLLM import LLMDishOptimizer
+
 
 if __name__ == "__main__":
     import os
@@ -15,11 +22,6 @@ if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_dir = os.path.abspath(os.path.join(current_dir, ".."))
     sys.path.append(project_dir)
-
-
-from DishOptimizerLLM import LLMDishOptimizer
-from store_access import new_database_access
-
 
 class MealRecommendation:
     def __init__(self) -> None:
