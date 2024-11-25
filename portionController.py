@@ -1,15 +1,13 @@
 import copy
 import json
 import re
-import os
-import sys
 from tqdm import tqdm
 import pandas as pd
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Local imports
-from store_access import new_database_access
+from database import db  # Use the shared database instance
 from DishOptimizerLLM import LLMDishOptimizer
 
 
@@ -25,8 +23,8 @@ if __name__ == "__main__":
 
 class MealRecommendation:
     def __init__(self) -> None:
+        self.db = db
         # Initialize database connection
-        self.db = new_database_access()  # default_store_access: testing database
         # Clear previous recommendation results
         # self.clear_previous_results()
         # Initialize recommendation ID to track each recommendation

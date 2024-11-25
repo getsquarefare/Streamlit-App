@@ -1,6 +1,4 @@
-# This module is used to interact with Data store API.
-# Currently it is AirTable
-from pyairtable.api.table import Table
+from pyairtable.api.table import Table  # Use direct table import
 from pyairtable.formulas import match
 import os
 from dotenv import load_dotenv
