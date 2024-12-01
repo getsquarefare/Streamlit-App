@@ -3,7 +3,7 @@ import pandas as pd
 from pptx import Presentation
 from datetime import datetime
 from portionController import MealRecommendation  # Specific import
-from shipping_sticker_generator import generate_ppt
+from shipping_sticker_generator import *
 from store_access import new_database_access  # Add this import
 import time
 
