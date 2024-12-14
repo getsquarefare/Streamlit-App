@@ -4,6 +4,7 @@ from pptx import Presentation
 from datetime import datetime
 from portionController import MealRecommendation  # Specific import
 from shipping_sticker_generator import *
+from shipping_sticker_generator_v2 import *
 from store_access import new_database_access  # Add this import
 import time
 
@@ -28,7 +29,7 @@ def main():
 
         st.success(f"Portioning algorithm completed in {elapsed_time:.2f} seconds! ✅")
 
-# clientservings csv download
+    # clientservings csv download
     st.divider()
     st.header(':green[ClientServings Excel] Generator 📑')
     st.markdown("⚠️ Please first confirm the data in Airtable's clientservings table is correct")
@@ -38,10 +39,9 @@ def main():
         all_output = ac.consolidated_all_dishes_output()
         ac.export_clientservings_to_excel(all_output)
 
-# shipping_sticker_generator
+    # shipping_sticker_generator
     st.divider()
     st.header(':blue[Shipping Sticker] Generator 🚚')
-    
 
     # Display the shipping template file for double-checking
     st.subheader("Step1: Upload Shipping Sticker Template",divider="blue")
@@ -97,6 +97,27 @@ def main():
             st.caption(":orange[This is the final table which is fed to sticker ppt, for review purpose]")
             st.dataframe(final_match_result_with_portion_df)
 
+
+    # shipping_sticker_generator_v2
+    st.divider()
+    st.header(':grey[ WIP Shipping Sticker] Generator 🚚')
+    new_template_file_v2 = st.file_uploader(":blue[Optionally Upload template.pptx]", type="pptx",key="new_template_file_v2")
+    if new_template_file_v2 is not None:
+        prs_file = Presentation(new_template_file_v2)
+    else:
+        prs_file = Presentation('template/Shipping_Sticker_Template.pptx')
+    shipping_sticker_generate_button = st.button("Try the new Shipping Sticker Generator")
+    if shipping_sticker_generate_button:
+        prs = generate_shipping_stickers(prs_file)
+        updated_ppt_name = f'{current_date}_shipping_sticker_updated.pptx'
+        prs.save(updated_ppt_name)
+        with open(updated_ppt_name, "rb") as file:
+            st.download_button(
+                label="Download Stickers",
+                data=file,
+                file_name=updated_ppt_name,
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            )
 
 if __name__ == "__main__":
     main()
