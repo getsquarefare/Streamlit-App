@@ -47,7 +47,7 @@ class AirTable():
                 .str.replace(r'\D', '', regex=True)  # Remove non-digits
                 .str.replace(r'(\d{3})(\d{3})(\d{4})', r'\1-\2-\3', regex=True))
         df['Shipping Province'] = df['Shipping Province'].str.upper()
-
+        df.fillna('', inplace=True)
         grouped_df = df.groupby([
         'Shipping Name',
         'Shipping Address 1',
@@ -60,7 +60,7 @@ class AirTable():
         ])['Quantity'].sum().reset_index()
 
         grouped_df['#_of_stickers'] = grouped_df['Quantity'].apply(lambda x: ceil(x / portion_per_sticker) * 2)
-        print(grouped_df)
+        
         return grouped_df
 
 
@@ -125,6 +125,7 @@ def generate_shipping_stickers(template_ppt):
     ac = new_database_access()
     data = ac.get_all_open_orders()
     cleaned_data = ac.process_data(data)
+    # print(cleaned_data[cleaned_data['Shipping Name'] == 'Christine Chung'])
     prs = generate_ppt(cleaned_data,template_ppt)
     return prs
 
