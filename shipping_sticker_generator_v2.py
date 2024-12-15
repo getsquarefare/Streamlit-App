@@ -37,7 +37,7 @@ class AirTable():
         
     
     def get_all_open_orders(self): 
-        data = self.open_orders_table.all(fields=self.fields.values())
+        data = self.open_orders_table.all(fields=self.fields.values(),view='viwurNEAwrcEKIqSd')
         df = pd.DataFrame([record['fields'] for record in data])
         return df
 
@@ -125,7 +125,7 @@ def generate_shipping_stickers(template_ppt):
     ac = new_database_access()
     data = ac.get_all_open_orders()
     cleaned_data = ac.process_data(data)
-    # print(cleaned_data[cleaned_data['Shipping Name'] == 'Christine Chung'])
+    #print(cleaned_data[cleaned_data['Shipping Name'] == 'Adrian Almazan'])
     prs = generate_ppt(cleaned_data,template_ppt)
     return prs
 
