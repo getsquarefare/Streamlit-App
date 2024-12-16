@@ -6,12 +6,15 @@ from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 import pandas as pd
 from datetime import datetime
-
+from dotenv import load_dotenv
+import streamlit as st
 
 class AirTable():
     def __init__(self, ex_api_key=None):
         # Set API key (use ex_api_key if provided, otherwise use hardcoded key)
-        self.api_key = ex_api_key or 'patrtOxizC1DDWByK.66629783b9227f7d192d22d3b25f9478c52ceb6b0e4c4c17f96cd9c6b62ce38e'
+        load_dotenv()
+        # Get the API key from environment variables or the passed argument
+        self.api_key = ex_api_key or st.secrets["AIRTABLE_API_KEY"]
         self.base_id = 'appEe646yuQexwHJo'  # Base ID for Airtable
         
         # Initialize tables
@@ -20,7 +23,7 @@ class AirTable():
         self.ingredients_table = Table(self.api_key, self.base_id, 'tblPhcO06ce4VcAPD')
 
     def get_clientservings_one_dish(self, dish_name):
-        CUSTOMER_FNAME = 'fldDs6QXE6uYKIlRk'
+        CUSTOMER_NAME = 'fldDs6QXE6uYKIlRk'
         MEAT = 'fldksE3QaxIIHzAIi'
         DELIVERY_DATE = 'fld6YLCoS7XCFK04G'
         DISH = 'fldmqHv4aXJxuJ8E2'
@@ -30,14 +33,21 @@ class AirTable():
         STARCH = 'fldZKmvAeBTY9tRkR'
         VEGGIES_G = 'fldnPpqigL4HmN4jV'
         GARNISH_G = 'fldpzKEyEiFA5vKIw'
-        CUSTOMER_LNAME = 'fldGnsL7EgGRQtxxJ'
+        LINKED_ORDERITEM = 'fld6tE8nDjVxSyEtb'
         MEAT_G = 'fld4V0qMFWsCJ6VU7'
         SAUCE_G = 'fldiudWDCfVwDGfrK'
         STARCH_G = 'fldoyv8xZjZwQ9Loh'
         VEGGIES = 'fldHaAZr6fiWZbNaf'
         GARNISH = 'fldgrNa89SJKSPtwY'
-        field_to_return = [CUSTOMER_FNAME, MEAT, DELIVERY_DATE, DISH, QUANTITY, ALL_DELETIONS, SAUCE,
-                           STARCH, VEGGIES_G, GARNISH_G, CUSTOMER_LNAME, MEAT_G, SAUCE_G, STARCH_G, VEGGIES, GARNISH]
+        REVIEW_NEEDED = 'fldzf5wNyvEvNQZ6N'
+        NUTRITION_NOTES_FROM_LINKED_ORDERITEM = 'fldq6CuqwGFg1v98H'
+        EXPLANATION = 'fldaugEJU01LZhlX7'
+        LAST_MODIFIED = 'fldV6RFrEYC7YrJT6'
+        UPDATED_NUTRITION_INFO = 'fldqV6jLeYa57gWly'
+        MEAL_PORTION_FROM_LINKED_ORDERITEM = 'fld00H3SpKNqTbhC0'
+        
+        field_to_return = [CUSTOMER_NAME, MEAT, DELIVERY_DATE, DISH, QUANTITY, ALL_DELETIONS, SAUCE,
+                           STARCH, VEGGIES_G, GARNISH_G, LINKED_ORDERITEM, MEAT_G, SAUCE_G, STARCH_G, VEGGIES, GARNISH]
         fields_here = dict()
         fields_here[DISH] = dish_name
         formula = match(fields_here)
@@ -67,7 +77,7 @@ class AirTable():
             ingrdt_name = one_ingrdt['Ingredient Name']
             ingrdt_component = one_ingrdt['Component']
             if ingrdt_component in components_output:
-                components_output[ingrdt_component].append("No " + ingrdt_name)
+                components_output[ingrdt_component].append("NO " + ingrdt_name.upper())
         return components_output
 
     def format_output_defalut_ingrdts(self, default_ingrdts):
@@ -113,8 +123,7 @@ class AirTable():
             output = dict()
             output['Position'] = index
             output['Delivery Date'] = one_clientserving['fields']['Delivery Date']
-            output['Customer Name'] = str(one_clientserving['fields']['Customer FName'][0]) + \
-                ' ' + str(one_clientserving['fields']['Customer LName'][0])
+            output['Customer Name'] = str(one_clientserving['fields']['Customer Name'][0])
             output['Quantity'] = one_clientserving['fields']['Quantity']
             #output['Dish Name'] = dish_name
             components_output = self.format_output_order_ingrdts(
@@ -198,7 +207,6 @@ if __name__ == "__main__":
 
     # result = ac.one_dish_output('Lemongrass Bowl')
     all_output = ac.consolidated_all_dishes_output()
-    print(all_output)
+    # print(result)
     ac.export_clientservings_to_excel(all_output)
 
-    print()
