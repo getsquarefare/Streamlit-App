@@ -27,7 +27,7 @@ def fetch_client_servings(sheet_id, sheet_name):
 
     df = df[['Client', 'Meal', '# portions']].dropna().copy()
     df['Client'] = df['Client'].str.replace(r'\s*\((.*?)\)', r', \1', regex=True)
-    df.loc[df['Meal'].isin(['Breakfast', 'Snack']), '# portions'] *= 0.5
+    df['# portions'] = df.apply(lambda row: row['# portions'] * 0.5 if row['Meal'] == 'Breakfast' else (row['# portions'] * 0.25 if row['Meal'] == 'Snack' else row['# portions']), axis=1)
     df = df.groupby('Client')['# portions'].sum().reset_index(name='total_portion_per_pp')
     return df
 
