@@ -21,6 +21,10 @@ def process_shipping_data(uploaded_shipping_file):
 def fetch_client_servings(sheet_id, sheet_name):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     df = pd.read_csv(url)
+
+    # Strip any leading/trailing spaces from column names
+    df.columns = df.columns.str.strip()
+
     df = df[['Client', 'Meal', '# portions']].dropna().copy()
     df['Client'] = df['Client'].str.replace(r'\s*\((.*?)\)', r', \1', regex=True)
     df.loc[df['Meal'].isin(['Breakfast', 'Snack']), '# portions'] *= 0.5
