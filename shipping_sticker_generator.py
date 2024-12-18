@@ -21,7 +21,7 @@ def process_shipping_data(uploaded_shipping_file):
 def fetch_client_servings(sheet_id, sheet_name):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
     df = pd.read_csv(url)
-    df = df[['Client', 'Meal', 'Delivery day', '# portions']].dropna().copy()
+    df = df[['Client', 'Meal', '# portions']].dropna().copy()
     df['Client'] = df['Client'].str.replace(r'\s*\((.*?)\)', r', \1', regex=True)
     df.loc[df['Meal'].isin(['Breakfast', 'Snack']), '# portions'] *= 0.5
     df = df.groupby('Client')['# portions'].sum().reset_index(name='total_portion_per_pp')
@@ -107,3 +107,14 @@ def generate_ppt(final_match_result_with_portion_df, prs):
                 last_slide_index += 1
                 count += 1
     return prs
+
+if __name__ == "__main__":
+    sheet_id = "1rorOBlH_K9qH4L39KehvI_rYGHo7agNVdCDisWydEj8"
+    LA_sheet_name = "ClientServings-LA"
+    NY_sheet_name = "ClientServings"
+    client_sheet_name = "Clients"
+
+    LA_clientservings_df = fetch_client_servings(sheet_id, LA_sheet_name)
+    
+    NY_clientservings_df = fetch_client_servings(sheet_id, NY_sheet_name)
+    print(NY_clientservings_df)
