@@ -33,6 +33,7 @@ class AirTable():
             'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W',
             'QUANTITY': 'fldvkwFMlBOW5um2y',
             'SHIPPING_PHONE': 'fldMuPbe4DX0rmq5z',
+            'MEAL_TYPE': 'fldCsBzoy9rxKlWmN'
         }
         
     
@@ -43,6 +44,7 @@ class AirTable():
 
     def process_data(self, df):
         portion_per_sticker=6
+        df['Quantity'] = df.apply(lambda row: row['Quantity'] * 0.5 if row['Order Type'] == 'Breakfast' else (row['Quantity'] * 0.25 if row['Order Type'] == 'Snack' else row['Quantity']), axis=1)
         df['Shipping Phone'] = (df['Shipping Phone'].astype(str).fillna('')
                 .str.replace(r'\D', '', regex=True)  # Remove non-digits
                 .str.replace(r'(\d{3})(\d{3})(\d{4})', r'\1-\2-\3', regex=True))
