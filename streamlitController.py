@@ -81,7 +81,7 @@ def main():
             final_match_result_with_portion_df = match_orders_to_shipping_data(updated_all_client_servings, df_shipping)
 
             # Generate the PowerPoint file
-            prs = generate_ppt(final_match_result_with_portion_df, prs_file)
+            prs =generate_ppt_v1(final_match_result_with_portion_df, prs_file)
 
             # Optional: Display the final DataFrame for checking
             st.subheader("Shipping Stickers")

@@ -71,7 +71,7 @@ def copy_slide(template, target_prs):
         new_slide.shapes._spTree.insert_element_before(new_shape._element, 'p:extLst')
     return new_slide
 
-def generate_ppt(final_match_result_with_portion_df, prs):
+def generate_ppt_v1(final_match_result_with_portion_df, prs):
     
     last_slide_index = 0
     template_slide = prs.slides[0]
