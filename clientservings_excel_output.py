@@ -8,6 +8,7 @@ import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
 import streamlit as st
+from io import BytesIO
 
 class AirTable():
     def __init__(self, ex_api_key=None):
@@ -45,9 +46,10 @@ class AirTable():
         LAST_MODIFIED = 'fldV6RFrEYC7YrJT6'
         UPDATED_NUTRITION_INFO = 'fldqV6jLeYa57gWly'
         MEAL_PORTION_FROM_LINKED_ORDERITEM = 'fld00H3SpKNqTbhC0'
+        MEAL_STICKER = 'fldeUJtuijUAbklCQ'
         
         field_to_return = [CUSTOMER_NAME, MEAT, DELIVERY_DATE, DISH, QUANTITY, ALL_DELETIONS, SAUCE,
-                           STARCH, VEGGIES_G, GARNISH_G, LINKED_ORDERITEM, MEAT_G, SAUCE_G, STARCH_G, VEGGIES, GARNISH]
+                           STARCH, VEGGIES_G, GARNISH_G, LINKED_ORDERITEM, MEAT_G, SAUCE_G, STARCH_G, VEGGIES, GARNISH,NUTRITION_NOTES_FROM_LINKED_ORDERITEM, MEAL_PORTION_FROM_LINKED_ORDERITEM,MEAL_STICKER]
         fields_here = dict()
         fields_here[DISH] = dish_name
         formula = match(fields_here)
@@ -113,32 +115,36 @@ class AirTable():
         ordered_clientservings = self.get_clientservings_one_dish(dish_name)
         default_ingrdts_in_name = self.format_output_defalut_ingrdts(
             default_ingrdts)
-        default_ingrdts_in_name['Dish Name'] = dish_name
+        default_ingrdts_in_name[' '] = dish_name
         outputs.append(default_ingrdts_in_name)
-
+        
         for one_clientserving in ordered_clientservings:
+            # print('one_clientserving',one_clientserving)
             def deleted(one_clientserving): return one_clientserving['fields'].get(
                 'All Deletions', [])
             deleted_ingrdts = deleted(one_clientserving)
             output = dict()
             output['Position'] = index
             output['Delivery Date'] = one_clientserving['fields']['Delivery Date']
-            output['Customer Name'] = str(one_clientserving['fields']['Customer Name'][0])
-            output['Quantity'] = one_clientserving['fields']['Quantity']
+            output['Client'] = str(one_clientserving['fields']['Customer Name'][0])
+            output['# Portions'] = one_clientserving['fields']['Quantity']
+            output['Allergies'] = one_clientserving['fields'].get('Nutrition Notes (from Linked OrderItem)', [""])[0]
+            output['Meal'] = one_clientserving['fields'].get('Meal Portion (from Linked OrderItem)',[''])[0].replace(' Subscriptions','')
+            output['Name of Dish'] = one_clientserving['fields'].get('Meal Sticker (from Linked OrderItem)',[''])[0]
             #output['Dish Name'] = dish_name
             components_output = self.format_output_order_ingrdts(
                 deleted_ingrdts)
 
             components_output['Meat'].append(
-                one_clientserving['fields']['Meat (g)'])
+                '-' if one_clientserving['fields']['Meat (g)'] == 0 else round(one_clientserving['fields']['Meat (g)'], 1))
             components_output['Sauce'].append(
-                one_clientserving['fields']['Sauce (g)'])
+                '-' if one_clientserving['fields']['Sauce (g)'] == 0 else round(one_clientserving['fields']['Sauce (g)'], 1))
             components_output['Starch'].append(
-                one_clientserving['fields']['Starch (g)'])
+                '-' if one_clientserving['fields']['Starch (g)'] == 0 else round(one_clientserving['fields']['Starch (g)'], 1))
             components_output['Veggies'].append(
-                one_clientserving['fields']['Veggies (g)'])
+                '-' if one_clientserving['fields']['Veggies (g)'] == 0 else round(one_clientserving['fields']['Veggies (g)'], 1))
             components_output['Garnish'].append(
-                one_clientserving['fields']['Garnish (g)'])
+                '-' if one_clientserving['fields']['Garnish (g)'] == 0 else round(one_clientserving['fields']['Garnish (g)'], 1))
             output.update(components_output)
             outputs.append(output)
             index += one_clientserving['fields']['Quantity'][0]
@@ -160,34 +166,33 @@ class AirTable():
         all_dishes = set()
         all_output = pd.DataFrame()
         for one_clientserving in all_clientservings:
-            all_dishes.add(one_clientserving['fields']['Dish'][0])
+            if one_clientserving['fields']['Dish']:
+                all_dishes.add(one_clientserving['fields']['Dish'][0])
         for dish in all_dishes:
-            result = ac.one_dish_output(dish)
-            result_pd = ac.generate_formatted_clientservings_onedish(result)
+            result = self.one_dish_output(dish)
+            result_pd = self.generate_formatted_clientservings_onedish(result)
             all_output = pd.concat(
                 [all_output, result_pd], axis=0, ignore_index=True)
         return all_output
 
-    def export_clientservings_to_excel(self, formatted_clientservings):
+    def generate_clientservings_excel(self, formatted_clientservings):
         current_date = datetime.now().strftime("%Y%m%d")
-        filename = f"{current_date}_clientservings.xlsx"
-        file_path = filename
+        output = BytesIO()
+
         formatted_clientservings = formatted_clientservings[[
-            'Dish Name','Position',  'Customer Name', 'Quantity','Delivery Date' ,'Sauce', 'Starch', 'Veggies','Meat', 'Garnish']]
-       
-        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-            formatted_clientservings.to_excel(
-                writer, index=False, sheet_name='Sheet1')
+            ' ', 'Position', 'Client', 'Meal', 'Delivery Date', 'Name of Dish', 
+            '# Portions', 'Sauce', 'Garnish', 'Starch', 'Veggies', 'Meat', 'Allergies'
+        ]]
+
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            formatted_clientservings.to_excel(writer, index=False, sheet_name='Sheet1')
 
             # Access the workbook and sheet
             workbook = writer.book
             sheet = workbook['Sheet1']
 
             # Define fill colors
-            blue_fill = PatternFill(
-                start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")  # Light blue color
-            white_fill = PatternFill(
-                start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")  # White color
+            blue_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
 
             # Apply row colors based on NaN index
             for i, row in enumerate(sheet.iter_rows(min_row=2, max_row=sheet.max_row, min_col=1, max_col=sheet.max_column)):
@@ -195,8 +200,8 @@ class AirTable():
                     for cell in row:
                         cell.fill = blue_fill
 
-        pass
-
+        output.seek(0)  # Move to the beginning of the file
+        return output
 
 def new_database_access():
     return AirTable()

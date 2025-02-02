@@ -38,7 +38,7 @@ class AirTable():
         
     
     def get_all_open_orders(self): 
-        data = self.open_orders_table.all(fields=self.fields.values(),view='viwurNEAwrcEKIqSd')
+        data = self.open_orders_table.all(fields=self.fields.values(),view='viwICiVvohvm7Zfuo')
         df = pd.DataFrame([record['fields'] for record in data])
         return df
 

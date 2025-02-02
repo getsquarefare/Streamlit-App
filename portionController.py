@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Local imports
 from database import db  # Use the shared database instance
 from DishOptimizerLLM import LLMDishOptimizer
+from DishOptimizerIFELSE import NewDishOptimizer
 
 
 if __name__ == "__main__":
@@ -45,10 +46,8 @@ class MealRecommendation:
             "Carbohydrate, total (g)": [("Carbs LB", "lb"), ("Carbs UB", "ub")],
         }
 
-        # Initialize the constraints dictionary with default values
+        # Initialize the constraints dictionary
         nutrient_constraints = {}
-        default_constraints = {"lb": 0.8, "ub": 1.2}
-
         # Loop through the field mapping to construct nutrient_constraints
         for nutrient, mappings in field_mapping.items():
             # Initialize the nutrient dictionary if it doesn't exist
@@ -57,15 +56,12 @@ class MealRecommendation:
             for record_field, constraint_key in mappings:
                 if record_field in fields:
                     # Add the specific constraint from the record fields
-                    nutrient_constraints[nutrient][constraint_key] = fields[
-                        record_field
-                    ]
+                    nutrient_constraints[nutrient][constraint_key] = fields[record_field]
                 else:
-                    # Set to default value if not found in the record fields
-                    nutrient_constraints[nutrient][constraint_key] = (
-                        default_constraints[constraint_key]
-                    )
+                    # Set to None if not found in the record fields
+                    nutrient_constraints[nutrient][constraint_key] = None
         return nutrient_constraints
+
     
     def clean_up_dish(self, data):
         # Extract the dish name from the first record (assuming all records belong to the same dish)
@@ -77,12 +73,12 @@ class MealRecommendation:
             ingredients.append({
                 "component": item['Component (from Ingredient)'][0],
                 "ingredientName": item['Ingredient Name'].strip(),
-                "grams": item['Grams'],
-                "kcal": item['Kcal'],
-                "protein(g)": item['Protein (g)'],
-                "fat(g)": item['Fat, Total (g)'],
-                "dietaryFiber(g)": item['Dietary Fiber (g)'],
-                "carbohydrate(g)": item['Carbohydrate, total (g)']
+                "baseGrams": float('{:.2f}'.format(item['Grams'])),
+                "kcalPerBaseGrams": float('{:.2f}'.format(item['Kcal'])),
+                "protein(g)PerBaseGrams": float('{:.2f}'.format(item['Protein (g)'])),
+                "fat(g)PerBaseGrams":float('{:.2f}'.format(item['Fat, Total (g)'])),
+                "dietaryFiber(g)PerBaseGrams": float('{:.2f}'.format(item['Dietary Fiber (g)'])),
+                "carbohydrate(g)PerBaseGrams": float('{:.2f}'.format(item['Carbohydrate, total (g)']))
             })
         
         # Return the final JSON structure
@@ -165,7 +161,8 @@ class MealRecommendation:
 
         dish = self.clean_up_dish(dish)
 
-        optimizer = LLMDishOptimizer(
+        nutrients = ['kcal', 'protein(g)', 'fat(g)', 'dietaryFiber(g)', 'carbohydrate(g)']
+        optimizer = NewDishOptimizer(
             grouped_ingredients,
             customer_requirements,
             nutrients,
@@ -178,11 +175,12 @@ class MealRecommendation:
             dish,
         )
 
-        try:
-            response = optimizer.solve()
-            return response
-        except:
-            return None
+        #try:
+        response = optimizer.solve()
+        return response
+        #except Exception as e:
+            #print
+            #return None
 
     # Function to aggregate grams by component
     def summarize_components(self, dish):
@@ -275,10 +273,13 @@ class MealRecommendation:
             "Total Fiber (g)": nutritional_information["Fiber"],
             "Updated Nutrition Info": str(nutritional_information),
             "Review Needed": review_needed,
-            "Explanation": explanation
+            "Explanation": explanation,
+            "Modified Recipe Details": str({item['ingredientName']: item['Grams'] for item in dish})
         }
         return recommendation_summary
 
+    
+    
     def get_default_recommendation_summary(
         self, dish_name, shopify_id, dish, client, final_ingredients, deletions,explanation
     ):
@@ -404,7 +405,44 @@ class MealRecommendation:
             "Total Fiber (g)": total_fiber,
         }
 
+    def generate_recommendations_with_thread(self):
+        #self.db.delete_all_clientservings() # only when reset
+        open_orders = self.db.get_all_open_orders()
+        client_dish_pairs = self.build_client_dish_mapping(
+            open_orders,
+            shopify_id_column="SquareSpace/ Internal OrderItem ID",
+            client_column="To_Match_Client_Nutrition",
+            dish_column="Dish ID",
+            ingredient_column="Final Ingredients",
+            deletion_column="Deletions",
+        )
+        finishedCount = 0
+        failedCount = 0
+        failedCases = []
+        # Create a ThreadPoolExecutor to run tasks concurrently
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            try:
+                future_to_pair = {
+                    executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions): 
+                    (shopify_id, client_id, dish_id) 
+                    for shopify_id, client_id, dish_id, final_ingredients, deletions in client_dish_pairs
+                }
+            except Exception as e:
+                    failedCount += 1
+                    failedCases.append(f"Error processing recommendation for Dish ID {dish_id} (Client ID {client_id}): {e.__class__.__name__} - {str(e.__traceback__)}\n")
+
+            for future in as_completed(future_to_pair):
+                shopify_id, client_id, dish_id = future_to_pair[future]
+                try:
+                    future.result()
+                    finishedCount += 1
+                except Exception as e:
+                    failedCount += 1
+                    failedCases.append(f"Error processing recommendation for Dish ID {dish_id} (Client ID {client_id}): {e.__class__.__name__} - {str(e.__traceback__)}\n")
+        return finishedCount, failedCount, failedCases
+
     def generate_recommendations(self):
+        
         # self.db.delete_all_clientservings() # only when reset
         open_orders = self.db.get_all_open_orders()
         client_dish_pairs = self.build_client_dish_mapping(
@@ -415,46 +453,25 @@ class MealRecommendation:
             ingredient_column="Final Ingredients",
             deletion_column="Deletions",
         )
-
-        # Create a ThreadPoolExecutor to run tasks concurrently
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            future_to_pair = {
-                executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions): 
-                (shopify_id, client_id, dish_id) 
-                for shopify_id, client_id, dish_id, final_ingredients, deletions in client_dish_pairs
-            }
-
-            for future in as_completed(future_to_pair):
-                shopify_id, client_id, dish_id = future_to_pair[future]
-                try:
-                    future.result()  # Retrieve result or raise exception if occurred
-                except Exception as e:
-                    print(f"Error processing recommendation for Dish ID {dish_id} (Client ID {client_id}): {e}")
+    
+        for shopify_id, client_id, dish_id, final_ingredients, deletions in client_dish_pairs:
+            self.process_recommendation(shopify_id, client_id, dish_id, final_ingredients, deletions)
+        return client_dish_pairs
+        
 
     def process_recommendation(self, shopify_id, client_id, dish_id, final_ingredients, deletions):
         # Extracted recommendation logic for concurrent execution in generate_recommendations
-        try:
-            client = self.db.get_client_details(recId=client_id)
-            dish = self.db.get_dish_calc_nutritions_by_dishId(dish_id=dish_id)
-        except Exception as e:
-            print(f"Missing information for Dish ID {dish_id} (Client ID {client_id}): {e}")
-            return  # Exit this task if information is missing
-
-        if not client or not dish:
-            print(f"Client or dish data missing for Dish ID {dish_id} (Client ID {client_id}).")
-            return
-
+        
+        client = self.db.get_client_details(recId=client_id)
+        dish = self.db.get_dish_calc_nutritions_by_dishId(dish_id=dish_id)
         final_ingredients_set = set()
         orig_ingredients_set = set()
         final_dish = []
 
         for final_ingredient in final_ingredients:
-            try:
-                final_ingredients_set.add(
-                    self.db.get_ingredient_details_by_recId(final_ingredient)["Ingredient ID"]
-                )
-            except Exception as e:
-                print(f"Error fetching ingredient {final_ingredient} details: {e}")
+            final_ingredients_set.add(
+                self.db.get_ingredient_details_by_recId(final_ingredient)["Ingredient ID"]
+            )
 
         # Populate original and final dish details
         for ingredient in dish:
@@ -470,44 +487,56 @@ class MealRecommendation:
             ingredient = self.db.get_ingredient_details_by_recId(ingredient_recId)
             if ingredient["Ingredient ID"] not in orig_ingredients_set:
                 ingredient["Component (from Ingredient)"] = [ingredient["Component"]]
-                ingredient["Kcal"] = ingredient["Energy (kcal)"]
-                component = ingredient["Component"]
-                ingredient["Grams"] = 5 if component == "Garnish" else 20 if component == "Sauce" else 50 if component == "Veggies" else 200
+                component = ingredient["Component"] 
+                default_grams = 5 if component == "Garnish" else 20 if component == "Sauce" else 50 if component == "Veggies" else 200
+                scale = default_grams / ingredient["Grams"]
+                ingredient['Kcal'] = ingredient["Energy (kcal)"] * scale
+                ingredient['Carbohydrate, total (g)'] = ingredient['Carbohydrate, total (g)'] * scale
+                ingredient['Protein (g)'] = ingredient['Protein (g)'] * scale
+                ingredient['Fat, Total (g)'] = ingredient['Fat, Total (g)'] * scale
+                ingredient['Dietary Fiber (g)'] = ingredient['Dietary Fiber (g)'] * scale
+                ingredient["Grams"] = default_grams
+                ingredient["Airtable Dish Name"] = dish[0]["Airtable Dish Name"]
+                ingredient["Recommendation ID"] = shopify_id
                 final_dish.append(ingredient)
-
+        print(f"Final dish for {shopify_id} (Client ID {client_id}): {final_dish}")
         if not final_dish:
             return
-
         dish_name = final_dish[0]["Airtable Dish Name"]
         recommendation_id = final_dish[0]["Recommendation ID"]
 
-        try:
-            # Run optimization and process response
-            response = self.optimize(final_dish, client)
-            # Use regex to extract the JSON part from the response as the modified recipe
-            json_part = json.loads(re.search(r"\{.*\}", response, re.DOTALL).group(0))
-            recipe = json_part.get("modified_recipe", {}).get("ingredients", [])
-            nutritional_information = json_part.get(
-                "updated_nutrition_info", {}
-            )
-            explanation = json_part.get("explanation", {})
-            review_needed = bool(json_part.get("review_needed"))
-            recommendation_summary = self.get_recommendation_summary(
-                dish_name,
-                recommendation_id,
-                shopify_id,
-                recipe,
-                client,
-                nutritional_information,
-                final_ingredients=final_ingredients,
-                deletions=deletions,
-                explanation=explanation,
-                review_needed=review_needed
-            )
-            self.db.output_clientservings(recommendation_summary)
-        except Exception as e:
+        # try:
+        # Run optimization and process response
+        response = self.optimize(final_dish, client)
+        # if response.startswith("```json") and response.endswith("```"):
+            # response = response[7:-3].strip()
+        print(f"Optimization response for {shopify_id} (Client ID {client_id}): {response}")
+        # json_part = json.loads(response)
+        json_part = response
+        recipe = json_part.get("modified_recipe", {}).get("ingredients", [])
+        nutritional_information = json_part.get(
+            "updated_nutrition_info", {}
+        )
+        explanation = str(json_part.get("explanation", {}))
+        review_needed = bool(json_part.get("results", {}).get("review_needed", False))
+        notes = str(json_part.get("results", {}).get("notes", False))
+        recommendation_summary = self.get_recommendation_summary(
+            dish_name,
+            recommendation_id,
+            shopify_id,
+            recipe,
+            client,
+            nutritional_information,
+            final_ingredients=final_ingredients,
+            deletions=deletions,
+            explanation=notes + "; " + explanation,
+            review_needed=review_needed
+        )
+        self.db.output_clientservings(recommendation_summary)
+        
+        """ except Exception as e:
             # Fallback to default recommendation summary in case of failure
-            print(f"Error in optimization for {shopify_id} (Client ID {client_id}): {e}")
+            print(f"Error in optimization for {shopify_id} (Client ID {client_id}): {e}; returned json: {response}")
             #  print("Original response: " + str(response))
             default_recommendation_summary = self.get_default_recommendation_summary(
                 dish_name,
@@ -518,7 +547,7 @@ class MealRecommendation:
                 deletions,
                 explanation = 'Error in optimization',
             )
-            self.db.output_clientservings(default_recommendation_summary)
+            self.db.output_clientservings(default_recommendation_summary) """
 
     def build_client_dish_mapping(
         self,
@@ -557,5 +586,8 @@ class MealRecommendation:
 
 
 if __name__ == "__main__":
+    start_time = pd.Timestamp.now()
     meal_recommendation = MealRecommendation()
-    meal_recommendation.generate_recommendations()
+    meal_recommendation.generate_recommendations_with_thread()
+    end_time = pd.Timestamp.now()
+    print(f"Total time taken: {end_time - start_time}")

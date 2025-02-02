@@ -96,6 +96,7 @@ class AirTable():
         TO_MATCH_CLIENT_NUTRITION = 'fldjEgeRh2bGxajXT'
         DISH_ID = 'fldLOvWuvg6X9Odvw'
         open_orders = self.open_orders_table.all(
+            view='viwrZHgdsYWnAMhtX',
             fields=[TO_MATCH_CLIENT_NUTRITION,
                     SHOPIFY_ID,
                     DISH_ID,
@@ -264,8 +265,15 @@ class AirTable():
         prepared_row['Garnish'] = ', '.join(
             portion_recommendations['Garnish'])
         prepared_row["Updated Nutrition Info"] = portion_recommendations["Updated Nutrition Info"]
-        prepared_row['Review Needed'] = portion_recommendations['Review Needed']
+        prepared_row['Portion Results Need Review'] = portion_recommendations['Review Needed']
         prepared_row['Explanation'] = portion_recommendations['Explanation']
+        prepared_row['Modified Recipe Details'] = portion_recommendations['Modified Recipe Details']
+
+        # print(prepared_row)
+        # Create the record in Airtable
+        self.clientserving_table.create(prepared_row)
+
+        return
 
         # print(prepared_row)
         # Create the record in Airtable
