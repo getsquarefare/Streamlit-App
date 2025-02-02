@@ -8,11 +8,15 @@ from shipping_sticker_generator_v2 import *
 from store_access import new_database_access  # Add this import
 import time
 from clientservings_excel_output import *
+import pytz
 
 # Streamlit app
 def main():
     st.title('Square Fare Toolkits 🧰')
-    current_date = datetime.now().strftime('%m%d%Y')
+    # Set the time zone to Eastern Standard Time (EST)
+    est = pytz.timezone('US/Eastern')
+    # Get the current date in EST
+    current_date = datetime.now(est).strftime('%m%d%Y')
 
 # portion algo trigger
     st.divider()
