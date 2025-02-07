@@ -37,7 +37,7 @@ class NewDishOptimizer:
         # Modified base weights - increased protein priority and fat penalty
         self.nutrient_weights = {
             'kcal': 5,        # Balanced priority for calories
-            'protein(g)': 8,  # Balanced protein priority
+            'protein(g)': 7,  # Balanced protein priority
             'carbohydrate(g)': 3,  # Balanced carb priority
             'dietaryFiber(g)': 3,
             'fat(g)': 1       # Balanced fat priority
@@ -446,50 +446,56 @@ class NewDishOptimizer:
         adj = 0
 
         if component == 'protein':
-            # Adjust protein intake
             if protein_ratio != 1.0:
-                adj = ((1.0 / protein_ratio) - 1.0)
-                
-                # Reduce protein adjustment if carbs are high and contribute more to calories
+                base_adj = ((1.0 / protein_ratio) - 1.0) * 0.98
                 if carb_ratio > 1 and carb_contrib > protein_contrib:
-                    adj = ((1.0 / protein_ratio) - 1.0)
-                
-                # Further adjust if carbs are high but overall calories are low
-                elif carb_ratio >= 1 and kcal_ratio < 1 and carb_contrib < protein_contrib:
-                    adj = ((1.0 / kcal_ratio) - 1.0) * 0.5
+                    # Reduce adjustment when carbs are excessive
+                    adj = base_adj * 0.7
+                elif carb_ratio >= 1 and kcal_ratio < 1:
+                    # Balance protein with calories
+                    adj = min(base_adj, (1.0 / kcal_ratio) - 1.0)
+                else:
+                    adj = base_adj
                     
         elif component == 'veggies':
-            # Adjust vegetable intake for fiber balance
             if fiber_ratio < 1:
-                adj = ((1.0 / fiber_ratio) - 1.0)  # Increase veggies if fiber is low
-            elif carb_ratio > 1.0:
-                # Reduce veggie intake if carbs are excessive
-                adj = ((1.0 / carb_ratio) - 1.0) * 0.5
+                base_adj = (1.0 / fiber_ratio) - 1.0
+                if carb_ratio > 1.2:  # Only reduce for significantly high carbs
+                    adj = base_adj * 0.7
+                else:
+                    adj = base_adj
+            elif carb_ratio != 1.0:
+                adj = ((1.0 / carb_ratio) - 1.0) * 0.3
+            elif kcal_ratio < 1.0:
+                adj = ((1.0 / kcal_ratio) - 1.0) * 0.2
                 
         elif component == 'starch':
-            # Balance carbohydrate and calorie intake
-            if carb_ratio < 1.0:  # If carbohydrate intake is low
-                if kcal_ratio > 0:  # But calorie intake is high
-                    adj = 0.6 * ((1.0 / carb_ratio) - 1.0)  # Conservative increase in starch
-                    if protein_ratio < 1:
-                        adj = 0.5 * ((1.0 / carb_ratio) - 1.0)  # Further reduce adjustment if protein is also low
-                elif kcal_ratio < 0:  # If calories are low
-                    adj = min(((1.0 / carb_ratio) - 1.0), (1.0 / kcal_ratio) - 1.0)  # Conservative increase
+            if carb_ratio < 1.0:
+                base_adj = (1.0 / carb_ratio) - 1.0
+                if kcal_ratio > 1.0:
+                    # Moderate increase if calories are high
+                    adj = base_adj * 0.4
+                elif protein_ratio < 1.0:
+                    # Conservative increase if protein is low
+                    adj = base_adj * 0.3
                 else:
-                    adj = ((1.0 / carb_ratio) - 1.0) * 0.3  # Moderate increase
+                    # Normal increase
+                    adj = base_adj * 0.6
+            elif carb_ratio > 1.0:
+                # Reduce starch when carbs are high
+                adj = ((1.0 / carb_ratio) - 1.0) * (0.8 if kcal_ratio > 1.0 else 1.0)
+            elif kcal_ratio < 1.0 and protein_ratio == 1.0:
+                adj = ((1.0 / kcal_ratio) - 1.0) * 0.3
+            # Fiber adjustment override
+            elif fiber_ratio < 1 and carb_ratio <= 1.2:  # Allow slightly higher carb threshold
+                fiber_adj = ((1.0 / fiber_ratio) - 1.0) * 0.2
+                adj = max(adj, fiber_adj)  # Take the larger adjustment
             
-            elif carb_ratio > 1.0:  # If carbohydrate intake is high
-                if kcal_ratio > 0:  # And calorie intake is also high
-                    adj = min(((1.0 / carb_ratio) - 1.0), (1.0 / kcal_ratio) - 1.0)  # Limit starch intake
-                else:
-                    adj = ((1.0 / carb_ratio) - 1.0)  # Adjust normally to reduce starch intake
+
             
-            # Override: Increase starch intake if fiber is low and carb ratio is not excessive
-            if fiber_ratio < 1 and carb_ratio <= 1:
-                adj = ((1.0 / fiber_ratio) - 1.0) * 0.3  # Small increase for fiber support
-        
-        # Add randomization to prevent getting stuck
+                # Add randomization to prevent getting stuck
         return adj * random.uniform(0.9, 1.1)
+
 
     def _adjust_ingredients_sequentially(self, recipe, initial_nutrition):
         """Adjust ingredients one at a time following manual optimization steps"""
@@ -571,11 +577,15 @@ class NewDishOptimizer:
         best_deviation = float('inf')
         best_nutrition = None
 
-        # if dish only contains one ingredient, return result (only achieve calories goal) immediately
-        if (len(recipe) == 1):
+        custom_order = {'protein': 0, 'veggies': 1, 'starch': 2, 'sauce': 3, 'garnish': 4}
+        # Sort data based on the custom order
+        recipe = sorted(recipe, key=lambda x: custom_order[x['component']])
+        # Get unique components
+        unique_components = set(item['component'] for item in recipe)
+        if (len(unique_components) <= 3):
             recipe[0]['scaler'] = self.customer_requirements['kcal'] / self.grouped_ingredients[recipe[0]['component']]['Kcal']
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
-
+        
         # Initialize recipe with base scalers
         initial_nutrition = self.calculate_total_nutrition(recipe)
         if initial_nutrition['kcal'] > 0:

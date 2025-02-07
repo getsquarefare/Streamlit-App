@@ -62,7 +62,7 @@ def main():
     # shipping_sticker_generator_v1
     st.divider()
     st.header(':blue[Shipping Sticker] Generator - Google Sheets 🚚')
-    st.markdown("⚠️ Source Table: Google Sheets")
+    st.markdown("⚠️ Source Table: Uploaded Sheet")
     # Display the shipping template file for double-checking
     st.subheader("Step1: Upload Shipping Sticker Template",divider="blue")
    
@@ -120,7 +120,7 @@ def main():
 
     # shipping_sticker_generator_v2
     st.divider()
-    st.header(':blue[Shipping Sticker] Generator 🚚 - Airtable')
+    st.header(':blue[Shipping Sticker] Generator - Airtable 🚚')
     st.markdown("⚠️ Source Table: [Open Orders > All](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwICiVvohvm7Zfuo?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
     new_template_file_v2 = st.file_uploader(":blue[Optionally Upload template.pptx]", type="pptx",key="new_template_file_v2")
