@@ -582,7 +582,7 @@ class NewDishOptimizer:
         recipe = sorted(recipe, key=lambda x: custom_order[x['component']])
         # Get unique components
         unique_components = set(item['component'] for item in recipe)
-        if (len(unique_components) <= 3):
+        if (len(recipe) == 1):
             recipe[0]['scaler'] = self.customer_requirements['kcal'] / self.grouped_ingredients[recipe[0]['component']]['Kcal']
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
         
