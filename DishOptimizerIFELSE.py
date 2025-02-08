@@ -580,10 +580,17 @@ class NewDishOptimizer:
         custom_order = {'protein': 0, 'veggies': 1, 'starch': 2, 'sauce': 3, 'garnish': 4}
         # Sort data based on the custom order
         recipe = sorted(recipe, key=lambda x: custom_order[x['component']])
-        # Get unique components
-        unique_components = set(item['component'] for item in recipe)
-        if (len(recipe) == 1):
-            recipe[0]['scaler'] = self.customer_requirements['kcal'] / self.grouped_ingredients[recipe[0]['component']]['Kcal']
+        # Get unique components except for sauce and garnish
+        unique_components = set(item['component'] for item in recipe if item['component'] not in {'sauce', 'garnish'})
+        non_sauce_garnish_kcal = sum(
+            item['kcalPerBaseGrams'] for item in recipe if item['component'] not in {'sauce', 'garnish'}
+        )
+        if (len(unique_components) == 1):
+            for item in recipe:
+                if item['component'] in {'sauce', 'garnish'}:
+                    item['scaler'] = 1
+                else:
+                    item['scaler'] = self.customer_requirements['kcal'] / non_sauce_garnish_kcal * 0.8
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
         
         # Initialize recipe with base scalers
