@@ -37,9 +37,9 @@ class NewDishOptimizer:
         # Modified base weights - increased protein priority and fat penalty
         self.nutrient_weights = {
             'kcal': 5,        # Balanced priority for calories
-            'protein(g)': 7,  # Balanced protein priority
+            'protein(g)': 5,  # Balanced protein priority
             'carbohydrate(g)': 3,  # Balanced carb priority
-            'dietaryFiber(g)': 3,
+            'dietaryFiber(g)': 4,
             'fat(g)': 1       # Balanced fat priority
         }
 
