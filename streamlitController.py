@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from pptx import Presentation
-from datetime import datetime
+from datetime import datetime,timedelta
 from portionController import MealRecommendation  # Specific import
 from shipping_sticker_generator import *
 from shipping_sticker_generator_v2 import *
@@ -32,8 +32,9 @@ def main():
             finishedCount, failedCount, failedCases = meal_recommendation.generate_recommendations_with_thread()
             end_time = time.time()
             elapsed_time = end_time - start_time
+            elapsed_time_str = str(timedelta(seconds=elapsed_time))
 
-        st.success(f"{finishedCount} orders completed in {elapsed_time:.2f} seconds! ✅")
+        st.success(f"{finishedCount} orders completed in {elapsed_time_str} seconds! ✅")
         if failedCount > 0:
             st.error(f"{failedCount} orders failed to process. Please review the following cases:")
             st.write(failedCases)
