@@ -95,6 +95,8 @@ class AirTable():
         FINAL_INGREDIENTS = 'fldUaOeaIzQQ8091p'
         TO_MATCH_CLIENT_NUTRITION = 'fldjEgeRh2bGxajXT'
         DISH_ID = 'fldLOvWuvg6X9Odvw'
+        PORITON_RESULT = 'fldadHgYOukaCrC6v'
+        
         open_orders = self.open_orders_table.all(
             view='viwrZHgdsYWnAMhtX',
             fields=[TO_MATCH_CLIENT_NUTRITION,
@@ -103,7 +105,10 @@ class AirTable():
                     FINAL_INGREDIENTS,
                     SELECTED_PROTEIN,
                     QUANTITY,
-                    DELETIONS],formula="{Portion Result (in ClientServings)} = BLANK()")
+                    DELETIONS,
+                    PORITON_RESULT],
+                    formula="{Portion Result (in ClientServings)} = BLANK()"
+                    )
         return open_orders
 
     # Subscription Orders (Intermediary Table)
@@ -149,8 +154,11 @@ class AirTable():
 
             calculate_rate = crt_ingrdt['Grams']/crt_ingrdt_nutrition['(g)']
 
-            merged_dish_ingrdt['energy'] = calculate_rate * \
-                merged_dish_ingrdt['Energy (kcal)']
+            merged_dish_ingrdt['energy'] = calculate_rate * (
+                merged_dish_ingrdt['Energy (kcal)'] if merged_dish_ingrdt['Energy (kcal)'] > 0 else
+                merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)'] if merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)'] > 0 else
+                0
+            )
             # merged_dish_ingrdt['energy_Atwater'] = calculate_rate * \
             #     merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)']
             # merged_dish_ingrdt['Kcal'] = merged_dish_ingrdt['energy'] if merged_dish_ingrdt[
