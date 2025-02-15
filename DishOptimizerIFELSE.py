@@ -578,7 +578,7 @@ class NewDishOptimizer:
         
         # Use existing adjustment logic but for single ingredient
         base_adjustment = self._get_ingredient_adjustment(component, nutrient_ratios, contributions)
-        return max(min(base_adjustment, 3), -1)
+        return base_adjustment
 
     def _recipes_are_similar(self, recipe1, recipe2, threshold=0.01):
         """Check if two recipes are similar enough to consider converged"""
@@ -588,7 +588,7 @@ class NewDishOptimizer:
         return True
 
     
-    def solve(self, max_iterations=100):
+    def solve(self, max_iterations=1000):
         """Modified solver with sequential ingredient adjustment strategy"""
         if not self.dish:
             return None, None
