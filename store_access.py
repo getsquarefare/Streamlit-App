@@ -95,7 +95,8 @@ class AirTable():
         FINAL_INGREDIENTS = 'fldUaOeaIzQQ8091p'
         TO_MATCH_CLIENT_NUTRITION = 'fldjEgeRh2bGxajXT'
         DISH_ID = 'fldLOvWuvg6X9Odvw'
-        PORITON_RESULT = 'fldadHgYOukaCrC6v'
+        PORITON_RESULT = 'fldadHgYOukaCrC6v',
+        SKIP_PORTION = "fldIKtQS5bIEr1iNU"
         
         open_orders = self.open_orders_table.all(
             view='viwrZHgdsYWnAMhtX',
@@ -106,9 +107,11 @@ class AirTable():
                     SELECTED_PROTEIN,
                     QUANTITY,
                     DELETIONS,
-                    PORITON_RESULT],
+                    PORITON_RESULT,
+                    SKIP_PORTION],
                     formula="{Portion Result (in ClientServings)} = BLANK()"
                     )
+        
         return open_orders
 
     # Subscription Orders (Intermediary Table)
@@ -275,7 +278,7 @@ class AirTable():
         prepared_row["Updated Nutrition Info"] = portion_recommendations["Updated Nutrition Info"]
         prepared_row['Portion Results Need Review'] = portion_recommendations['Review Needed']
         prepared_row['Explanation'] = portion_recommendations['Explanation']
-        prepared_row['Modified Recipe Details'] = portion_recommendations['Modified Recipe Details']
+        prepared_row['Modified Recipe Details'] = portion_recommendations.get('Modified Recipe Details', "")
 
         # print(prepared_row)
         # Create the record in Airtable

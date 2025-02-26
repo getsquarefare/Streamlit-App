@@ -82,7 +82,7 @@ class NewDishOptimizer:
             lower_bound *= target
 
 
-        # Ratio calculation logic:
+        """ # Ratio calculation logic:
             # - If the current value exceeds the upper bound, ratio > 1.0 (proportional to excess)
             # - If the current value is below the target (or lower bound for non-protein nutrients), ratio < 1.0 (inversely proportional to deficit)
             # - If within target range, return 1.0 (no adjustment needed)
@@ -94,8 +94,9 @@ class NewDishOptimizer:
             return current_value / (target if normalized_nutrient == 'protein' else lower_bound)
         else:
             # Within bounds: return default ratio
-            return 1.0
-        
+            return 1.0 """
+        return current_value / target    
+
     def _get_diff_ratios(self, current_nutrition):
         """Calculate basic ratios based on bounds"""
         ratios = {}
@@ -235,7 +236,7 @@ class NewDishOptimizer:
                 nutrition = self.calculate_total_nutrition(recipe)
                 total_kcal = nutrition['kcal']
                 if total_kcal > 0:
-                    total_meat = sum(self.get_effective_grams(i) for i in recipe if 'meat' in i['component'])
+                    total_meat = sum(self.get_effective_grams(i) for i in recipe if 'protein' in i['component'])
                     meat_per_100_cal = (total_meat / total_kcal) * 100
                     if meat_per_100_cal < self.min_meat_per_100_cal:
                         # print(f"Meat per 100 cal constraint violation: {meat_per_100_cal:.1f} < {self.min_meat_per_100_cal}")
@@ -449,7 +450,6 @@ class NewDishOptimizer:
         adj = 0
 
         if component == 'protein':
-            # Protein logic remains unchanged
             if protein_ratio > 1.0:
                 base_adj = ((1.0 / protein_ratio) - 1.0)
                 if kcal_ratio < 1.0:
@@ -466,25 +466,24 @@ class NewDishOptimizer:
                     adj = base_adj * 0.6
                 else:
                     adj = base_adj
-            elif kcal_ratio < 1.0:
-                adj = ((1.0 / kcal_ratio) - 1.0) / 10
+            elif protein_ratio > 1 and protein_ratio < 1.03 and kcal_ratio < 1.0:
+                adj = ((1.0 / kcal_ratio) - 1.0) / 4
                     
         elif component == 'veggies':
-            # Modified veggie adjustments for stronger reduction
             if fiber_ratio < 1:
-                # Still prioritize low fiber, but more conservative increase
                 base_adj = (1.0 / fiber_ratio) - 1.0
                 if carb_ratio > 1.2:
-                    adj = base_adj * 0.6  # More conservative (was 0.7)
+                    adj = base_adj * 0.7  
                 else:
-                    adj = base_adj * 0.8  # Slightly reduced increase (was 1.0)
+                    adj = base_adj  
             elif fiber_ratio > 1 and kcal_ratio > 1:
-                # Stronger reduction for excess fiber
-                base_adj = ((1.0 / kcal_ratio) - 1.0) / 4  # Increased reduction (was -0.15)
+                base_adj = ((1.0 / kcal_ratio) - 1.0) / 4 
                 if carb_ratio > 1.0:
-                    adj = base_adj * 1.3  # Stronger reduction (was 1.2)
+                    adj = base_adj * 1.2  
                 else:
-                    adj = base_adj * 1.1  # Added multiplier
+                    adj = base_adj
+            elif carb_ratio < 1.0:
+                adj = ((1.0 / carb_ratio) - 1.0) / 4
                 
         elif component == 'starch':
             # Modified starch adjustments for more aggressive increases
@@ -499,25 +498,27 @@ class NewDishOptimizer:
                 # More aggressive increase for low carbs
                 base_adj = (1.0 / carb_ratio) - 1.0
                 if kcal_ratio > 1.0:
-                    adj = base_adj * 0.5  # More increase (was 0.4)
+                    adj = base_adj * 0.3  
                 elif protein_ratio < 1.0:
-                    adj = base_adj * 0.4  # More increase (was 0.3)
+                    adj = base_adj * 0.2  
                 else:
-                    adj = base_adj * 0.8  # More increase (was 0.6)
+                    adj = base_adj * 0.6 
             elif kcal_ratio < 1.0:
                 # More aggressive increase for low calories
-                base_adj = ((1.0 / kcal_ratio) - 1.0)
-                if fiber_ratio > 1.2:
-                    adj = base_adj * 0.3  # More increase (was 0.2)
-                else:
-                    adj = base_adj / 2.5  # More increase (was /3)
+                adj = ((1.0 / kcal_ratio) - 1.0) / 4
             elif kcal_ratio > 1.0:
                 # Less aggressive reduction for high calories
                 adj = ((1.0 / kcal_ratio) - 1.0) / 4
 
+            if protein_contrib / carb_contrib > 0.5:
+                if adj > 0:
+                    adj *= 0.3
+                else:
+                    adj *= 2
+
         # Add small randomization to prevent getting stuck in local optima
         return adj * random.uniform(0.98, 1.02)
-   
+    
     def _adjust_ingredients_sequentially(self, recipe, initial_nutrition):
         """Adjust ingredients one at a time following manual optimization steps"""
         adjusted_recipe = [{**ing} for ing in recipe]
@@ -586,7 +587,19 @@ class NewDishOptimizer:
             if abs(ing1.get('scaler', 1.0) - ing2.get('scaler', 1.0)) > threshold:
                 return False
         return True
-
+    
+    def _final_adjustment(self, formatted_result, final_recipe,final_nutrition):
+        notes = formatted_result['results']['notes']
+        if 'kcal too low' in notes and 'carbohydrate(g) too high' not in notes:
+            get_kcal_difference = lambda text: float(text.split(" < ")[1][0:5]) - float(text.split("kcal too low: ")[1].split(" < ")[0][0:5])
+            difference = get_kcal_difference(notes)
+            least_protein_veggie = min((item for item in final_recipe if item["component"] == "veggies"), key=lambda x: x["protein(g)PerBaseGrams"])
+            grams_to_add = difference / least_protein_veggie["kcalPerBaseGrams"] * least_protein_veggie["baseGrams"]
+            least_protein_veggie["scaler"] += grams_to_add / least_protein_veggie["baseGrams"]
+            current_nutrition = self.calculate_total_nutrition(final_recipe)
+            return final_recipe, current_nutrition
+        else:
+            return final_recipe, final_nutrition
     
     def solve(self, max_iterations=1000):
         """Modified solver with sequential ingredient adjustment strategy"""
@@ -622,8 +635,8 @@ class NewDishOptimizer:
                 else:
                     nutrition_ratio = (
                         self.customer_requirements['protein(g)'] / initial_nutrition['protein(g)'] * 0.9 if ing['component'] == 'protein'
-                        else self.customer_requirements['carbohydrate(g)'] / initial_nutrition['carbohydrate(g)'] * 0.9 if ing['component'] == 'starch'
-                        else self.customer_requirements['dietaryFiber(g)'] / initial_nutrition['dietaryFiber(g)'] * 0.9 / veggie_count if ing['component'] == 'veggies'
+                        else self.customer_requirements['carbohydrate(g)'] / initial_nutrition['carbohydrate(g)'] * 0.3 if ing['component'] == 'starch'
+                        else self.customer_requirements['dietaryFiber(g)'] / initial_nutrition['dietaryFiber(g)'] if ing['component'] == 'veggies'
                         else 1.0
                     )
                     calorie_ratio = self.customer_requirements['kcal'] / initial_nutrition['kcal']
@@ -658,8 +671,13 @@ class NewDishOptimizer:
                 break
             
             recipe = adjusted_recipe
-
-        return self.format_result(best_recipe or recipe, best_nutrition or current_nutrition)
+        tmp_result = self.format_result(best_recipe or recipe, best_nutrition or current_nutrition)
+        if tmp_result['results']['review_needed']:
+            final_recipe, final_nutrition = self._final_adjustment(tmp_result, best_recipe or recipe, best_nutrition or current_nutrition)
+            return self.format_result(final_recipe, final_nutrition)
+        else:
+            return self.format_result(best_recipe or recipe, best_nutrition or current_nutrition)
+        
 # Example Usage and Testing
 if __name__ == "__main__":
     # Test data setup

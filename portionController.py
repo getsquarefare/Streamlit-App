@@ -281,69 +281,83 @@ class MealRecommendation:
     
     
     def get_default_recommendation_summary(
-        self, dish_name, shopify_id, dish, client, final_ingredients, deletions,explanation
-    ):
-        meat_g = sum(
-            [
-                ingredient["Grams"]
-                for ingredient in dish
-                if ingredient["Component (from Ingredient)"][0] == "protein"
-            ]
-        )
-        veggies_g = sum(
-            [
-                ingredient["Grams"]
-                for ingredient in dish
-                if ingredient["Component (from Ingredient)"][0] == "veggies"
-            ]
-        )
-        sauce_g = sum(
-            [
-                ingredient["Grams"]
-                for ingredient in dish
-                if ingredient["Component (from Ingredient)"][0] == "sauce"
-            ]
-        )
-        starch_g = sum(
-            [
-                ingredient["Grams"]
-                for ingredient in dish
-                if ingredient["Component (from Ingredient)"][0] == "starch"
-            ]
-        )
+            self,
+            dish_name,
+            recommendation_id,
+            shopify_id,
+            dish,
+            client,
+            nutritional_information,
+            final_ingredients,
+            deletions,
+            explanation,
+            review_needed
+        ):
+            meat_g = sum(
+                [
+                    ingredient["Grams"]
+                    for ingredient in dish
+                    if ingredient["Component (from Ingredient)"][0] == "Meat"
+                ]
+            )
+            veggies_g = sum(
+                [
+                    ingredient["Grams"]
+                    for ingredient in dish
+                    if ingredient["Component (from Ingredient)"][0] == "Veggies"
+                ]
+            )
+            sauce_g = sum(
+                [
+                    ingredient["Grams"]
+                    for ingredient in dish
+                    if ingredient["Component (from Ingredient)"][0] == "Sauce"
+                ]
+            )
+            starch_g = sum(
+                [
+                    ingredient["Grams"]
+                    for ingredient in dish
+                    if ingredient["Component (from Ingredient)"][0] == "Starch"
+                ]
+            )
 
-        garnish_g = sum(
-            [
-                ingredient["Grams"]
-                for ingredient in dish
-                if ingredient["Component (from Ingredient)"][0] == "garnish"
-            ]
-        )
+            garnish_g = sum(
+                [
+                    ingredient["Grams"]
+                    for ingredient in dish
+                    if ingredient["Component (from Ingredient)"][0] == "Garnish"
+                ]
+            )
 
-        recommendation_summary = {
-            "Recommendation ID": dish[0]["Recommendation ID"],
-            "Linked OrderItem": self.db.get_rcdid_by_shopify_orderlineitem(shopify_id),
-            "Dish": dish_name,
-            "Customer_FName": client["First_Name"],
-            "Customer_LName": client["Last_Name"],
-            "Delivery Date": "NA",
-            #"All Deletions": deletions,
-            "Meat": self.get_ingrdts_one_component("Meat", final_ingredients),
-            "Meat (g)": meat_g,
-            "Sauce": self.get_ingrdts_one_component("Sauce", final_ingredients),
-            "Sauce (g)": sauce_g,
-            "Starch": self.get_ingrdts_one_component("Starch", final_ingredients),
-            "Starch (g)": starch_g,
-            "Veggies": self.get_ingrdts_one_component("Veggies", final_ingredients),
-            "Veggies (g)": veggies_g,
-            "Garnish": self.get_ingrdts_one_component("Garnish", final_ingredients),
-            "Garnish (g)": garnish_g,
-            "Updated Nutrition Info": "Using default recipe",
-            "Review Needed": True,
-            "Explanation": explanation,
-        }
-        return recommendation_summary
-
+            recommendation_summary = {
+                "Recommendation ID": recommendation_id,
+                "Linked OrderItem": self.db.get_rcdid_by_shopify_orderlineitem(shopify_id),
+                "Dish": dish_name,
+                "Customer_FName": client.get("First_Name", "Unknown"),
+                "Customer_LName": client.get("Last_Name", "Unknown"),
+                "Delivery Date": "NA",
+                "All Deletions": deletions,
+                "Meat": self.get_ingrdts_one_component("Meat", final_ingredients),
+                "Meat (g)": meat_g,
+                "Sauce": self.get_ingrdts_one_component("Sauce", final_ingredients),
+                "Sauce (g)": sauce_g,
+                "Starch": self.get_ingrdts_one_component("Starch", final_ingredients),
+                "Starch (g)": starch_g,
+                "Veggies": self.get_ingrdts_one_component("Veggies", final_ingredients),
+                "Veggies (g)": veggies_g,
+                "Garnish": self.get_ingrdts_one_component("Garnish", final_ingredients),
+                "Garnish (g)": garnish_g,
+                "Total Calories (kcal)": nutritional_information.get("Calories", "N/A"),
+                "Total Carbs (g)": nutritional_information.get("Carbohydrates", "N/A"),
+                "Total Protein (g)": nutritional_information.get("Protein", "N/A"),
+                "Total Fat (g)": nutritional_information.get("Fat", "N/A"),
+                "Total Fiber (g)": nutritional_information.get("Fiber", "N/A"),
+                "Updated Nutrition Info": str(nutritional_information),
+                "Review Needed": review_needed,
+                "Explanation": explanation,
+            }
+            return recommendation_summary
     def get_ingrdts_one_component(self, component, final_ingredients):
         results = []
         for final_ingredient in final_ingredients:
@@ -415,6 +429,7 @@ class MealRecommendation:
             dish_column="Dish ID",
             ingredient_column="Final Ingredients",
             deletion_column="Deletions",
+            skip_portioning_column="Skip Portioning"
         )
         finishedCount = 0
         failedCount = 0
@@ -423,9 +438,9 @@ class MealRecommendation:
         with ThreadPoolExecutor(max_workers=10) as executor:
             try:
                 future_to_pair = {
-                    executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions): 
+                    executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning): 
                     (shopify_id, client_id, dish_id) 
-                    for shopify_id, client_id, dish_id, final_ingredients, deletions in client_dish_pairs
+                    for shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning in client_dish_pairs
                 }
             except Exception as e:
                     failedCount += 1
@@ -438,7 +453,7 @@ class MealRecommendation:
                     finishedCount += 1
                 except Exception as e:
                     failedCount += 1
-                    failedCases.append(f"Error processing recommendation for Dish ID {dish_id} (Client ID {client_id}): {e.__class__.__name__} - {str(e.__traceback__)}\n")
+                    failedCases.append(f"Error processing recommendation for Dish ID {dish_id} (Client ID {client_id}): {e.__class__.__name__} - {str(e.__context__)} - error: {str(e)}")
         return finishedCount, failedCount, failedCases
 
     def generate_recommendations(self):
@@ -459,7 +474,7 @@ class MealRecommendation:
         return client_dish_pairs
         
 
-    def process_recommendation(self, shopify_id, client_id, dish_id, final_ingredients, deletions):
+    def process_recommendation(self, shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning):
         # Extracted recommendation logic for concurrent execution in generate_recommendations
         
         client = self.db.get_client_details(recId=client_id)
@@ -505,6 +520,29 @@ class MealRecommendation:
         dish_name = final_dish[0]["Airtable Dish Name"]
         recommendation_id = final_dish[0]["Recommendation ID"]
 
+        # Check if portioning should be skipped. If so, output default recommendation summary
+        if skip_portioning:
+            print(f"Skipping portioning for Dish ID {dish_id} (Client ID {client_id}).")
+            default_recommendation_summary = self.get_default_recommendation_summary(
+                dish_name,
+                recommendation_id,
+                shopify_id,
+                final_dish,
+                client,
+                nutritional_information={
+                            "Calories": round(sum(ingredient.get("Kcal", 0) for ingredient in dish), 1),
+                            "Protein": round(sum(ingredient.get("Protein (g)", 0) for ingredient in dish), 1),
+                            "Carbohydrates": round(sum(ingredient.get("Carbohydrate, total (g)", 0) for ingredient in dish), 1),
+                            "Fiber": round(sum(ingredient.get("Dietary Fiber (g)", 0) for ingredient in dish), 1),
+                            "Fat": round(sum(ingredient.get("Fat, Total (g)", 0) for ingredient in dish), 1),
+                        },
+                final_ingredients=final_ingredients,
+                deletions=deletions,
+                explanation="Portioning skipped",
+                review_needed=False
+            )
+            self.db.output_clientservings(default_recommendation_summary)
+            return
         # try:
         # Run optimization and process response
         response = self.optimize(final_dish, client)
@@ -557,6 +595,7 @@ class MealRecommendation:
         dish_column,
         ingredient_column,
         deletion_column,
+        skip_portioning_column
     ):
         client_dish_pairs = []
 
@@ -577,11 +616,13 @@ class MealRecommendation:
             shopify_id = record_data[shopify_id_column]
             client_id = record_data[client_column][0]
             dish_id = record_data[dish_column]
-
+            if skip_portioning_column in record_data and record_data[skip_portioning_column] is not None:
+                skip_portioning = record_data[skip_portioning_column]
+            else:
+                skip_portioning = False
             client_dish_pairs.append(
-                (shopify_id, client_id, dish_id, final_ingredients, deletions)
+                (shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning)
             )
-
         return client_dish_pairs
 
 
