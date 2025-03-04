@@ -588,18 +588,94 @@ class NewDishOptimizer:
                 return False
         return True
     
-    def _final_adjustment(self, formatted_result, final_recipe,final_nutrition):
+    def _final_adjustment(self, formatted_result, final_recipe, final_nutrition):
         notes = formatted_result['results']['notes']
-        if 'kcal too low' in notes and 'carbohydrate(g) too high' not in notes:
+        
+        # Case 1: Calories low but carbs and protein not high
+        if 'kcal too low' in notes and 'carbohydrate(g) too high' not in notes and 'protein(g) too high' not in notes:
+            # Extract calorie difference needed
             get_kcal_difference = lambda text: float(text.split(" < ")[1][0:5]) - float(text.split("kcal too low: ")[1].split(" < ")[0][0:5])
-            difference = get_kcal_difference(notes)
-            least_protein_veggie = min((item for item in final_recipe if item["component"] == "veggies"), key=lambda x: x["protein(g)PerBaseGrams"])
-            grams_to_add = difference / least_protein_veggie["kcalPerBaseGrams"] * least_protein_veggie["baseGrams"]
-            least_protein_veggie["scaler"] += grams_to_add / least_protein_veggie["baseGrams"]
-            current_nutrition = self.calculate_total_nutrition(final_recipe)
-            return final_recipe, current_nutrition
-        else:
-            return final_recipe, final_nutrition
+            total_kcal_needed = get_kcal_difference(notes)
+            
+            # First try to add calories through veggies up to 300g cap
+            total_veggie_grams = sum(self.get_effective_grams(item) for item in final_recipe if item["component"] == "veggies")
+            remaining_veggie_capacity = MAX_VEGGIES_GRAM - total_veggie_grams
+            
+            if remaining_veggie_capacity > 0:
+                # Find the veggie with lowest protein content
+                least_protein_veggie = min(
+                    (item for item in final_recipe if item["component"] == "veggies"), 
+                    key=lambda x: x["protein(g)PerBaseGrams"]
+                )
+                
+                # Calculate how many calories we can add through veggies
+                max_veggie_kcal = remaining_veggie_capacity * (least_protein_veggie["kcalPerBaseGrams"] / least_protein_veggie["baseGrams"])
+                veggie_kcal_to_add = min(total_kcal_needed, max_veggie_kcal)
+                
+                # Adjust veggie scaler
+                grams_to_add = veggie_kcal_to_add / (least_protein_veggie["kcalPerBaseGrams"] / least_protein_veggie["baseGrams"])
+                least_protein_veggie["scaler"] += grams_to_add / least_protein_veggie["baseGrams"]
+                
+                # Update remaining calories needed
+                total_kcal_needed -= veggie_kcal_to_add
+            
+            # If we still need calories, add through protein
+            if total_kcal_needed > 0:
+                protein_items = [item for item in final_recipe if item["component"] == "protein"]
+                if protein_items:
+                    # Use the first protein item
+                    protein_item = protein_items[0]
+                    kcal_per_gram = protein_item["kcalPerBaseGrams"] / protein_item["baseGrams"]
+                    grams_to_add = total_kcal_needed / kcal_per_gram
+                    protein_item["scaler"] += grams_to_add / protein_item["baseGrams"]
+        
+        # Case 2: Both calories and carbs are low
+        elif 'kcal too low' in notes and 'carbohydrate(g) too low' in notes:
+            # Extract calorie difference needed
+            get_kcal_difference = lambda text: float(text.split(" < ")[1][0:5]) - float(text.split("kcal too low: ")[1].split(" < ")[0][0:5])
+            total_kcal_needed = get_kcal_difference(notes)
+            
+            # First try to add through veggies up to 300g cap
+            total_veggie_grams = sum(self.get_effective_grams(item) for item in final_recipe if item["component"] == "veggies")
+            remaining_veggie_capacity = MAX_VEGGIES_GRAM - total_veggie_grams
+            
+            if remaining_veggie_capacity > 0:
+                # Find the veggie with highest calorie content
+                highest_cal_veggie = max(
+                    (item for item in final_recipe if item["component"] == "veggies"), 
+                    key=lambda x: x["kcalPerBaseGrams"]
+                )
+                
+                # Calculate how many calories we can add through veggies
+                max_veggie_kcal = remaining_veggie_capacity * (highest_cal_veggie["kcalPerBaseGrams"] / highest_cal_veggie["baseGrams"])
+                veggie_kcal_to_add = min(total_kcal_needed, max_veggie_kcal)
+                
+                # Adjust veggie scaler
+                grams_to_add = veggie_kcal_to_add / (highest_cal_veggie["kcalPerBaseGrams"] / highest_cal_veggie["baseGrams"])
+                highest_cal_veggie["scaler"] += grams_to_add / highest_cal_veggie["baseGrams"]
+                
+                # Update remaining calories needed
+                total_kcal_needed -= veggie_kcal_to_add
+            
+            # If we still need calories, add through starch
+            if total_kcal_needed > 0:
+                starch_items = [item for item in final_recipe if item["component"] == "starch"]
+                if starch_items:
+                    starch_item = starch_items[0]
+                    kcal_per_gram = starch_item["kcalPerBaseGrams"] / starch_item["baseGrams"]
+                    grams_to_add = total_kcal_needed / kcal_per_gram
+                    
+                    # Check against MAX_STARCH_GRAM
+                    total_starch_grams = sum(self.get_effective_grams(item) for item in final_recipe if item["component"] == "starch")
+                    if total_starch_grams + grams_to_add > MAX_STARCH_GRAM:
+                        grams_to_add = MAX_STARCH_GRAM - total_starch_grams
+                    
+                    # Adjust starch scaler
+                    starch_item["scaler"] += grams_to_add / starch_item["baseGrams"]
+        
+        # Recalculate nutrition after any adjustments
+        current_nutrition = self.calculate_total_nutrition(final_recipe)
+        return final_recipe, current_nutrition
     
     def solve(self, max_iterations=1000):
         """Modified solver with sequential ingredient adjustment strategy"""
