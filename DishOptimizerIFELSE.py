@@ -2,6 +2,8 @@ import numpy as np
 import random
 import math
 
+SPECIAL_PROTEIN_ITEMS_ONE = ["overnight oats", "yogurt", "yoghurt"]
+MAX_SPECIAL_PROTEIN_ONE_GRAM = 400
 MAX_VEGGIES_GRAM = 300
 MAX_STARCH_GRAM = 280
 
@@ -32,6 +34,7 @@ class NewDishOptimizer:
         self.max_meal_grams_per_100_cal = max_meal_grams_per_100_cal
         self.dish = self._initialize_recipe(dish) if dish else None
         self.scaler_penalty_weight = 0.1  # Penalty weight for scaler deviations
+        self.is_special_protein_one = False  # Flag to track if we're processing a special protein item
         
         # Simplified base weights - only keep essential ones
         # Modified base weights - increased protein priority and fat penalty
@@ -252,7 +255,7 @@ class NewDishOptimizer:
                     if grams_per_100_cal > self.max_meal_grams_per_100_cal:
                         # print(f"Grams per 100 cal constraint violation: {grams_per_100_cal:.1f} > {self.max_meal_grams_per_100_cal}")
                         return False
-
+            
             return True  # All constraints met
             
         except Exception as e:
@@ -414,6 +417,11 @@ class NewDishOptimizer:
                 for i, x in enumerate(recipe) if x['component'] == 'starch'
             )
             if potential_grams > MAX_STARCH_GRAM:
+                return False
+        
+        elif component == 'protein' and self.is_special_protein_one:
+            potential_grams = recipe[idx]['baseGrams'] * new_scaler
+            if potential_grams > MAX_SPECIAL_PROTEIN_ONE_GRAM:
                 return False
         
         return True
@@ -625,6 +633,19 @@ class NewDishOptimizer:
                 if protein_items:
                     # Use the first protein item
                     protein_item = protein_items[0]
+                    
+                    # Check if it's a special protein item that needs to be capped at 400g
+                    ingredient_name = protein_item["ingredientName"].lower()
+                    if any(item.lower() in ingredient_name for item in SPECIAL_PROTEIN_ITEMS_ONE):
+                        # Calculate current effective grams
+                        current_grams = self.get_effective_grams(protein_item)
+                        # Calculate how many more grams we can add before hitting 400g
+                        max_additional_grams = max(0, MAX_SPECIAL_PROTEIN_ONE_GRAM - current_grams)
+                        # Calculate how many calories that represents
+                        max_additional_kcal = max_additional_grams * (protein_item["kcalPerBaseGrams"] / protein_item["baseGrams"])
+                        # Use the smaller of what we need and what we can add
+                        total_kcal_needed = min(total_kcal_needed, max_additional_kcal)
+                    
                     kcal_per_gram = protein_item["kcalPerBaseGrams"] / protein_item["baseGrams"]
                     grams_to_add = total_kcal_needed / kcal_per_gram
                     protein_item["scaler"] += grams_to_add / protein_item["baseGrams"]
@@ -687,6 +708,12 @@ class NewDishOptimizer:
         best_deviation = float('inf')
         best_nutrition = None
 
+        # Check if any protein items are special protein items
+        self.is_special_protein_one = any(
+            any(item.lower() in ing['ingredientName'].lower() for item in SPECIAL_PROTEIN_ITEMS_ONE)
+            for ing in recipe if ing['component'] == 'protein'
+        )
+        
         unique_components = set(item['component'] for item in recipe if item['component'] not in {'sauce', 'garnish'})
         non_sauce_garnish_kcal = sum(
             item['kcalPerBaseGrams'] for item in recipe if item['component'] not in {'sauce', 'garnish'}
@@ -697,6 +724,10 @@ class NewDishOptimizer:
                     item['scaler'] = 1
                 else:
                     item['scaler'] = self.customer_requirements['kcal'] / non_sauce_garnish_kcal * 0.9
+            recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_VEGGIES_GRAM)
+            recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
+            if self.is_special_protein_one:
+                recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_PROTEIN_ONE_GRAM)
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
         
         # Initialize recipe with base scalers
@@ -724,7 +755,9 @@ class NewDishOptimizer:
             # Enforce component limits
             recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_VEGGIES_GRAM)
             recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
-
+            if self.is_special_protein_one:
+                recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_PROTEIN_ONE_GRAM)
+           
             # Get current state
             current_nutrition = self.calculate_total_nutrition(recipe)
             current_deviation = self.calculate_weighted_deviation(current_nutrition, self.customer_requirements, recipe)
