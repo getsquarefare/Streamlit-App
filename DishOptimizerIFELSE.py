@@ -313,7 +313,8 @@ class NewDishOptimizer:
                 {
                     "ingredientName": ing["ingredientName"],
                     "Component": ing["component"],
-                    "Grams": round(ing["baseGrams"] * ing.get("scaler"), 2)
+                    "Grams": round(ing["baseGrams"] * ing.get("scaler"), 2),
+                    "ingredientId": ing["ingredientId"]
                 }
                 for ing in recipe
             ]

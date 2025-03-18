@@ -66,13 +66,13 @@ class MealRecommendation:
     def clean_up_dish(self, data):
         # Extract the dish name from the first record (assuming all records belong to the same dish)
         dish_name = data[0]['Airtable Dish Name']
-        
         # Create a cleaned ingredients list
         ingredients = []
         for item in data:
             ingredients.append({
                 "component": item['Component (from Ingredient)'][0],
                 "ingredientName": item['Ingredient Name'].strip(),
+                "ingredientId": item['Ingredient ID'].strip(),
                 "baseGrams": float('{:.2f}'.format(item['Grams'])),
                 "kcalPerBaseGrams": float('{:.2f}'.format(item['Kcal'])),
                 "protein(g)PerBaseGrams": float('{:.2f}'.format(item['Protein (g)'])),
@@ -211,6 +211,7 @@ class MealRecommendation:
         explanation,
         review_needed
     ):
+        print(f"Final dish: {dish}")
         meat_g = sum(
             [
                 ingredient["Grams"]
@@ -274,7 +275,7 @@ class MealRecommendation:
             "Updated Nutrition Info": str(nutritional_information),
             "Review Needed": review_needed,
             "Explanation": explanation,
-            "Modified Recipe Details": str({item['ingredientName']: item['Grams'] for item in dish})
+            "Modified Recipe Details": str({item['ingredientId']: item['Grams'] for item in dish})
         }
         return recommendation_summary
 
