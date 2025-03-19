@@ -526,7 +526,7 @@ class NewDishOptimizer:
                     adj *= 2
 
         # Add small randomization to prevent getting stuck in local optima
-        return adj * random.uniform(0.98, 1.02)
+        return adj
     
     def _adjust_ingredients_sequentially(self, recipe, initial_nutrition):
         """Adjust ingredients one at a time following manual optimization steps"""
