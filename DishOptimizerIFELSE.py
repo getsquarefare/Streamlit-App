@@ -9,6 +9,7 @@ SPECIAL_FRUIT_SNACK_DISH_KEYWORDS = ['seasonal fruit salad']
 MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM = 220
 MAX_VEGGIES_GRAM = 300
 MAX_STARCH_GRAM = 280
+MIN_STARCH_GRAM = 50
 
 class NewDishOptimizer:
     def __init__(self, grouped_ingredients, customer_requirements, nutrients, nutrient_constraints,
@@ -300,6 +301,10 @@ class NewDishOptimizer:
                 # print(f"Constraint violation - grams per 100 cal too high: {grams_per_100_cal:.1f} > {self.max_meal_grams_per_100_cal}")
                 return False
         
+        # check total grams of starch
+        if sum(self.get_effective_grams(i) for i in recipe if i['component'] == 'starch') < MAX_STARCH_GRAM:
+            return False
+        
         return True
 
     def _calculate_ingredient_contributions(self, recipe):
@@ -407,6 +412,18 @@ class NewDishOptimizer:
             for idx, ing in enumerate(recipe):
                 if ing['component'] == component:
                     recipe[idx]['scaler'] *= reduction_factor
+        return recipe
+    
+    def adjust_component_above_minimum(self, recipe, component, min_grams):
+        """Adjust component scalers to meet minimum gram requirement."""
+        total_grams = self.get_component_grams(recipe, component)
+        if total_grams < min_grams:
+            # Calculate how much we need to increase
+            increase_factor = min_grams / total_grams
+            # Apply increase to all ingredients of this component
+            for idx, ing in enumerate(recipe):
+                if ing['component'] == component:
+                    recipe[idx]['scaler'] *= increase_factor
         return recipe
     
     def _is_valid_adjustment(self, recipe, idx, new_scaler):
@@ -740,15 +757,16 @@ class NewDishOptimizer:
         best_recipe = None
         best_deviation = float('inf')
         best_nutrition = None
-        # print('dish',dish)
+        
         # Check if any protein items are special protein items
         self.is_special_yogurt_protein = any(
             any(item.lower() in ing['ingredientName'].lower() for item in SPECIAL_YOGURT_PROTEIN_ITEM_KEYWORDS)
             for ing in recipe if ing['component'] == 'protein'
         )
+        
+        # Set the veggies limit based on dish type
         self.is_special_fruit_snack = any(keyword in dish_name.lower() for keyword in SPECIAL_FRUIT_SNACK_DISH_KEYWORDS)
-        if self.is_special_fruit_snack:
-            MAX_VEGGIES_GRAM = MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM
+        veggies_limit = MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM if self.is_special_fruit_snack else MAX_VEGGIES_GRAM
         
         unique_components = set(item['component'] for item in recipe if item['component'] not in {'sauce', 'garnish'})
         non_sauce_garnish_kcal = sum(
@@ -759,7 +777,7 @@ class NewDishOptimizer:
                 if item['component'] in {'sauce', 'garnish'}:
                     item['scaler'] = 1
                 else:
-                    item['scaler'] = self.customer_requirements['kcal'] / non_sauce_garnish_kcal * 0.9
+                    item['scaler'] = self.customer_requirements['kcal'] / non_sauce_garnish_kcal * (1- (unique_components - 1) * 0.5)
             recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_VEGGIES_GRAM)
             recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
             if self.is_special_yogurt_protein:
@@ -789,8 +807,9 @@ class NewDishOptimizer:
 
         for iteration in range(max_iterations):
             # Enforce component limits
-            recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_VEGGIES_GRAM)
+            recipe = self.adjust_component_within_limit(recipe, 'veggies', veggies_limit)
             recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
+            recipe = self.adjust_component_above_minimum(recipe, 'starch', MIN_STARCH_GRAM)
             if self.is_special_yogurt_protein:
                 recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
            
