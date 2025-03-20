@@ -211,7 +211,7 @@ class MealRecommendation:
         explanation,
         review_needed
     ):
-        print(f"Final dish: {dish}")
+        # print(f"Final dish: {dish}")
         meat_g = sum(
             [
                 ingredient["Grams"]
@@ -436,7 +436,7 @@ class MealRecommendation:
         failedCount = 0
         failedCases = []
         # Create a ThreadPoolExecutor to run tasks concurrently
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             try:
                 future_to_pair = {
                     executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning): 
@@ -515,7 +515,7 @@ class MealRecommendation:
                 ingredient["Airtable Dish Name"] = dish[0]["Airtable Dish Name"]
                 ingredient["Recommendation ID"] = shopify_id
                 final_dish.append(ingredient)
-        print(f"Final dish for {shopify_id} (Client ID {client_id}): {final_dish}")
+        # print(f"Final dish for {shopify_id} (Client ID {client_id}): {final_dish}")
         if not final_dish:
             return
         dish_name = final_dish[0]["Airtable Dish Name"]
