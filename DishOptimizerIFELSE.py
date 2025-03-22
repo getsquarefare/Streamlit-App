@@ -726,7 +726,7 @@ class NewDishOptimizer:
         # Set the veggies limit based on dish type
         self.is_special_fruit_snack = any(keyword in dish_name.lower() for keyword in SPECIAL_FRUIT_SNACK_DISH_KEYWORDS)
         veggies_limit = MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM if self.is_special_fruit_snack else MAX_VEGGIES_GRAM
-        protein_max = next((MAX_PROTEIN_PER_TYPE.get(i.get('protein_type', '').lower(), 500) for i in dish.get('ingredients', []) if i.get('component') == 'protein' and i.get('protein_type', '').lower() != 'ignore'), 500)
+        protein_max = next((MAX_PROTEIN_PER_TYPE.get(i.get('protein_type', '').lower(), 500) for i in recipe if i.get('component') == 'protein' and i.get('protein_type', '').lower() != 'ignore'), 500)
         
         unique_components = set(item['component'] for item in recipe if item['component'] not in {'sauce', 'garnish'})
         non_sauce_garnish_kcal = sum(
