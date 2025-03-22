@@ -777,7 +777,7 @@ class NewDishOptimizer:
                 if item['component'] in {'sauce', 'garnish'}:
                     item['scaler'] = 1
                 else:
-                    item['scaler'] = self.customer_requirements['kcal'] / non_sauce_garnish_kcal * (1- (unique_components - 1) * 0.5)
+                    item['scaler'] = self.customer_requirements['kcal'] / non_sauce_garnish_kcal * (1- (len(unique_components) - 1) * 0.5)
             recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_VEGGIES_GRAM)
             recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
             if self.is_special_yogurt_protein:
