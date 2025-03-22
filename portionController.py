@@ -70,6 +70,8 @@ class MealRecommendation:
         ingredients = []
         for item in data:
             ingredients.append({
+                "id": item['id'],
+                "protein_type": item['protein_type'],
                 "component": item['Component (from Ingredient)'][0],
                 "ingredientName": item['Ingredient Name'].strip(),
                 "ingredientId": item['Ingredient ID'].strip(),
@@ -363,6 +365,7 @@ class MealRecommendation:
         results = []
         for final_ingredient in final_ingredients:
             ingredient = self.db.get_ingredient_details_by_recId(final_ingredient)
+            ingredient['id'] = final_ingredient
             if ingredient["Component"] == component:
                 results.append(ingredient["Ingredient Name"])
         return results
@@ -372,10 +375,12 @@ class MealRecommendation:
         deleted = set()
         for final_ingredient in final_ingredients:
             ingredient = self.db.get_ingredient_details_by_recId(final_ingredient)
+            ingredient['id'] = final_ingredient
             if ingredient["Component"] == component:
                 contained.add(ingredient["Ingredient Name"])
         for deletion in deletions:
             ingredient = self.db.get_ingredient_details_by_recId(deletion)
+            ingredient['id'] = final_ingredient
             if ingredient["Component"] == component:
                 deleted.add(ingredient["Ingredient Name"])
         message = "Contains: "
@@ -432,6 +437,7 @@ class MealRecommendation:
             deletion_column="Deletions",
             skip_portioning_column="Skip Portioning"
         )
+        protein_type_mapping = self.db.get_protein_group_mapping()
         finishedCount = 0
         failedCount = 0
         failedCases = []
@@ -439,9 +445,9 @@ class MealRecommendation:
         with ThreadPoolExecutor(max_workers=5) as executor:
             try:
                 future_to_pair = {
-                    executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning): 
+                    executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning, protein_type_mapping): 
                     (shopify_id, client_id, dish_id) 
-                    for shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning in client_dish_pairs
+                    for shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning in client_dish_pairs
                 }
             except Exception as e:
                     failedCount += 1
@@ -475,7 +481,7 @@ class MealRecommendation:
         return client_dish_pairs
         
 
-    def process_recommendation(self, shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning):
+    def process_recommendation(self, shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning,protein_type_mapping):
         # Extracted recommendation logic for concurrent execution in generate_recommendations
         
         client = self.db.get_client_details(recId=client_id)
@@ -483,7 +489,6 @@ class MealRecommendation:
         final_ingredients_set = set()
         orig_ingredients_set = set()
         final_dish = []
-
         for final_ingredient in final_ingredients:
             final_ingredients_set.add(
                 self.db.get_ingredient_details_by_recId(final_ingredient)["Ingredient ID"]
@@ -496,12 +501,15 @@ class MealRecommendation:
                 ingredient["Recommendation ID"] = self.recommendation_id
                 ingredient["Dish ID"] = dish_id
                 ingredient["Client_Id"] = [client["identifier"]]
+                ingredient['id'] = ingredient["id"]
+                ingredient['protein_type'] = protein_type_mapping.get(ingredient["id"], "ignore")
                 final_dish.append(ingredient)
 
         # Add new ingredients not present in the original recipe
         for ingredient_recId in final_ingredients:
             ingredient = self.db.get_ingredient_details_by_recId(ingredient_recId)
             if ingredient["Ingredient ID"] not in orig_ingredients_set:
+                ingredient['id'] = ingredient_recId
                 ingredient["Component (from Ingredient)"] = [ingredient["Component"]]
                 component = ingredient["Component"] 
                 default_grams = 5 if component == "Garnish" else 20 if component == "Sauce" else 50 if component == "Veggies" else 200
@@ -514,8 +522,11 @@ class MealRecommendation:
                 ingredient["Grams"] = default_grams
                 ingredient["Airtable Dish Name"] = dish[0]["Airtable Dish Name"]
                 ingredient["Recommendation ID"] = shopify_id
+                ingredient['protein_type'] = protein_type_mapping.get(ingredient_recId, "ignore")
                 final_dish.append(ingredient)
-        # print(f"Final dish for {shopify_id} (Client ID {client_id}): {final_dish}")
+        
+        
+        print(f"Final dish for {shopify_id}\n {final_dish}")
         if not final_dish:
             return
         dish_name = final_dish[0]["Airtable Dish Name"]

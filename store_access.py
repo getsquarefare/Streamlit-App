@@ -134,6 +134,29 @@ class AirTable():
                                                                      'id': 589, 'Dish Name': 'Lemongrass Bowl', 'Component (from Ingredient)': ['Meat'], 'Ingredient ID': 'SF Roasted Tofu', 'NDB': 'SF', 'Ingredient Name': 'Roasted Tofu', 'Grams': 155, 'Kcal': 172.0, 'Protein (g)': 16.0, 'Fat, Total (g)': 11.0, 'Dietary Fiber (g)': 1.0, 'Carbohydrate, total (g)': 1.0}, {'id': 589, 'Dish Name': 'Lemongrass Bowl', 'Component (from Ingredient)': ['Sauce'], 'Ingredient ID': 'SF Vietnamese Sauce', 'NDB': 'SF', 'Ingredient Name': 'Vietnamese Sauce', 'Grams': 20, 'Kcal': 54.0, 'Protein (g)': 1.0, 'Fat, Total (g)': 5.0, 'Dietary Fiber (g)': 0.0, 'Carbohydrate, total (g)': 0.0}, {'id': 589, 'Dish Name': 'Lemongrass Bowl', 'Component (from Ingredient)': ['Veggies'], 'Ingredient ID': '11109 Cabbage', 'NDB': '11109', 'Ingredient Name': 'Cabbage', 'Grams': 100, 'Kcal': 166.0, 'Protein (g)': 12.9, 'Fat, Total (g)': 1.18, 'Dietary Fiber (g)': 1.2, 'Carbohydrate, total (g)': 25.9}, {'id': 589, 'Dish Name': 'Lemongrass Bowl', 'Component (from Ingredient)': ['Starch'], 'Ingredient ID': '20137 Quinoa', 'NDB': '20137', 'Ingredient Name': 'Quinoa', 'Grams': 100, 'Kcal': 120.0, 'Protein (g)': 4.4, 'Fat, Total (g)': 1.92, 'Dietary Fiber (g)': 2.8, 'Carbohydrate, total (g)': 21.3}]
     '''
 
+    def get_protein_group_mapping(self):
+        # Define field IDs for variants table
+        INGREDIENT_FIELD = 'fldSh0BApXpOMKYb5'  # Replace with actual field ID for Ingredient
+        PROTEIN_TYPE_FIELD = 'fldnDXrKI4vXeSm7Q'  # Replace with actual field ID for Final Protein Type
+        records = self.variants_rule_table.all()
+        protein_type_map = {}
+    
+        for record in records:
+            fields = record.get('fields', {})
+            
+            # Check if this record has both required fields
+            if 'Ingredient' in fields and 'Final Protein Type (portioning)' in fields:
+                ingredients = fields['Ingredient']
+                protein_type = fields['Final Protein Type (portioning)'].lower()
+                
+                # Add each ingredient to the map
+                if isinstance(ingredients, list):
+                    for ingredient_id in ingredients:
+                        protein_type_map[ingredient_id] = protein_type
+
+        return protein_type_map
+
+
     def get_dish_calc_nutritions_by_dishId(self, dish_id):
 
         DISH_FIELDS = {
@@ -156,7 +179,7 @@ class AirTable():
                                   dish_ingrdt['fields'], **crt_ingrdt_nutrition}
 
             calculate_rate = crt_ingrdt['Grams']/crt_ingrdt_nutrition['(g)']
-
+            merged_dish_ingrdt['id']=crt_ingrdt['Ingredient'][0]
             merged_dish_ingrdt['energy'] = calculate_rate * (
                 merged_dish_ingrdt['Energy (kcal)'] if merged_dish_ingrdt['Energy (kcal)'] > 0 else
                 merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)'] if merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)'] > 0 else
@@ -256,7 +279,7 @@ class AirTable():
         return open_orders[0]['id']
 
     def output_clientservings(self, portion_recommendations):
-
+        
         # Flatten and prepare the data for Airtable
         prepared_row = {}
         prepared_row['Linked OrderItem'] = [
@@ -316,4 +339,5 @@ if __name__ == "__main__":
     # ac.delete_all_recommendations()
     result = ac.get_ingredient_details_by_recId('recBSki8u4LmiEVym')
     # result = ac.open_orders_table.all(fields='Final Ingredients')
+    # result = ac.get_protein_group_mapping()
     print(result)
