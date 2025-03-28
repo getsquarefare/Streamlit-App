@@ -627,85 +627,347 @@ class NewDishOptimizer:
     def _final_adjustment(self, formatted_result, final_recipe, final_nutrition):
         notes = formatted_result['results']['notes']
         
-        # Case 1: Need more carbs but protein is sufficient
-        if ('carbohydrate(g) too low' in notes and 
-            'protein(g) too low' not in notes):
+        # Helper functions for common operations with more robust parsing
+        def extract_values(note_type):
+            """Extract current and target values from a specific note type."""
+            if note_type in notes:
+                # Extract the specific note segment by finding the pattern
+                pattern = f"{note_type}: "
+                start_pos = notes.find(pattern)
+                if start_pos == -1:
+                    return 0
+                
+                # Find the semicolon that ends this note or end of string
+                end_pos = notes.find(';', start_pos)
+                if end_pos == -1:
+                    end_pos = len(notes)
+                
+                note_segment = notes[start_pos + len(pattern):end_pos]
+                
+                # Split to get current and target values based on comparison operator
+                if ' < ' in note_segment:  # Too low case
+                    parts = note_segment.split(' < ')
+                    if len(parts) != 2:
+                        return 0
+                    current = float(parts[0].strip())
+                    target = float(parts[1].strip())
+                    return target - current  # Positive means need to add more
+                elif ' > ' in note_segment:  # Too high case
+                    parts = note_segment.split(' > ')
+                    if len(parts) != 2:
+                        return 0
+                    current = float(parts[0].strip())
+                    target = float(parts[1].strip())
+                    return target - current  # Negative means need to reduce
+                
+            return 0
+        
+        def get_carbs_needed():
+            low_value = extract_values("carbohydrate(g) too low")
+            high_value = extract_values("carbohydrate(g) too high")
+            return low_value or high_value  # Return whichever is non-zero
             
-            # Try veggies first
+        def get_protein_needed():
+            low_value = extract_values("protein(g) too low")
+            high_value = extract_values("protein(g) too high")
+            return low_value or high_value  # Return whichever is non-zero
+            
+        def get_kcal_needed():
+            low_value = extract_values("kcal too low")
+            high_value = extract_values("kcal too high")
+            return low_value or high_value  # Return whichever is non-zero
+            
+        def add_veggies_for_carbs(carbs_needed):
+            # Try to add veggies to increase carbs
             total_veggie_grams = sum(self.get_effective_grams(item) for item in final_recipe if item["component"] == "veggies")
             remaining_veggie_capacity = MAX_VEGGIES_GRAM - total_veggie_grams
             
             if remaining_veggie_capacity > 0:
                 # Find veggie with highest carb content
-                highest_carb_veggie = max(
-                    (item for item in final_recipe if item["component"] == "veggies"), 
-                    key=lambda x: x["carbohydrate(g)PerBaseGrams"]
-                )
-                
-                # Calculate how many carbs we can add through veggies
-                carbs_per_gram = highest_carb_veggie["carbohydrate(g)PerBaseGrams"] / highest_carb_veggie["baseGrams"]
-                carbs_needed = float(notes.split("carbohydrate(g) too low: ")[1].split(" < ")[1]) - float(notes.split("carbohydrate(g) too low: ")[1].split(" < ")[0])
-                grams_to_add = min(remaining_veggie_capacity, carbs_needed / carbs_per_gram)
-                highest_carb_veggie["scaler"] += grams_to_add / highest_carb_veggie["baseGrams"]
-                
-                # Update remaining carbs needed
-                current_nutrition = self.calculate_total_nutrition(final_recipe)
-                notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
-            
-            # If still need carbs, try starch
-            if 'carbohydrate(g) too low' in notes:
-                starch_items = [item for item in final_recipe if item["component"] == "starch"]
-                if starch_items:
-                    starch_item = starch_items[0]
-                    current_starch_grams = sum(self.get_effective_grams(item) for item in final_recipe 
-                                            if item["component"] == "starch")
-                    remaining_starch_capacity = MAX_STARCH_GRAM - current_starch_grams
+                veggies = [item for item in final_recipe if item["component"] == "veggies"]
+                if veggies:
+                    highest_carb_veggie = max(
+                        veggies, 
+                        key=lambda x: x["carbohydrate(g)PerBaseGrams"]
+                    )
                     
-                    if remaining_starch_capacity > 0:
-                        carbs_needed = float(notes.split("carbohydrate(g) too low: ")[1].split(" < ")[1]) - float(notes.split("carbohydrate(g) too low: ")[1].split(" < ")[0])
-                        carbs_per_gram = starch_item["carbohydrate(g)PerBaseGrams"] / starch_item["baseGrams"]
-                        grams_to_add = min(remaining_starch_capacity, carbs_needed / carbs_per_gram)
-                        starch_item["scaler"] += grams_to_add / starch_item["baseGrams"]
-        
-        # Case 2: Calories not hit but protein and carbs are sufficient
-        elif ('kcal too low' in notes and 
-            'protein(g) too low' not in notes and 
-            'carbohydrate(g) too low' not in notes):
+                    # Calculate how many carbs we can add through veggies
+                    carbs_per_gram = highest_carb_veggie["carbohydrate(g)PerBaseGrams"] / highest_carb_veggie["baseGrams"]
+                    grams_to_add = min(remaining_veggie_capacity, carbs_needed / carbs_per_gram)
+                    highest_carb_veggie["scaler"] += grams_to_add / highest_carb_veggie["baseGrams"]
+                    return True
+            return False
             
-            # Try doubling sauce first - only use integer scalers (1 or 2)
+        def add_starch_for_carbs(carbs_needed):
+            # Try to add starch to increase carbs
+            starch_items = [item for item in final_recipe if item["component"] == "starch"]
+            if starch_items:
+                starch_item = starch_items[0]
+                current_starch_grams = sum(self.get_effective_grams(item) for item in final_recipe 
+                                        if item["component"] == "starch")
+                remaining_starch_capacity = MAX_STARCH_GRAM - current_starch_grams
+                
+                if remaining_starch_capacity > 0:
+                    carbs_per_gram = starch_item["carbohydrate(g)PerBaseGrams"] / starch_item["baseGrams"]
+                    grams_to_add = min(remaining_starch_capacity, carbs_needed / carbs_per_gram)
+                    starch_item["scaler"] += grams_to_add / starch_item["baseGrams"]
+                    return True
+            return False
+            
+        def add_protein(protein_needed, for_calories=False):
+            # Try to add protein to increase protein or calories
+            protein_items = [item for item in final_recipe if item["component"] == "protein"]
+            if protein_items:
+                protein_item = protein_items[0]
+                
+                # Determine how much to add based on protein or calories needed
+                if for_calories:
+                    kcal_needed = get_kcal_needed()
+                    kcal_per_gram = protein_item["kcalPerBaseGrams"] / protein_item["baseGrams"]
+                    grams_to_add = kcal_needed / kcal_per_gram
+                else:
+                    protein_per_gram = protein_item["protein(g)PerBaseGrams"] / protein_item["baseGrams"]
+                    grams_to_add = protein_needed / protein_per_gram
+                
+                # Check if it's a special protein item
+                if (any(item.lower() in protein_item["ingredientName"].lower() 
+                    for item in SPECIAL_YOGURT_PROTEIN_ITEM_KEYWORDS)):
+                    current_grams = self.get_effective_grams(protein_item)
+                    max_additional_grams = max(0, MAX_SPECIAL_YOGURT_PROTEIN_GRAM - current_grams)
+                    grams_to_add = min(grams_to_add, max_additional_grams)
+                else:
+                    # Regular protein item
+                    remaining_protein_capacity = self.protein_max - sum(self.get_effective_grams(item) for item in final_recipe if item["component"] == "protein")
+                    if remaining_protein_capacity > 0:
+                        grams_to_add = min(grams_to_add, remaining_protein_capacity)
+                    else:
+                        return False
+                        
+                protein_item["scaler"] += grams_to_add / protein_item["baseGrams"]
+                return True
+            return False
+            
+        def double_sauce():
+            # Try doubling sauce for more calories
             sauce_items = [item for item in final_recipe if item["component"] == "sauce"]
             if sauce_items:
+                adjusted = False
                 for sauce_item in sauce_items:
                     current_scaler = int(sauce_item["scaler"])  # Ensure current scaler is integer
                     if current_scaler == 1:  # Only double if currently at 1
                         sauce_item["scaler"] = 2
+                        adjusted = True
+                return adjusted
+            return False
             
-            # Recalculate nutrition after sauce adjustment
+        def reduce_protein(excess_protein):
+            """Reduce protein when it's too high."""
+            protein_items = [item for item in final_recipe if item["component"] == "protein"]
+            if protein_items and excess_protein < 0:  # excess_protein will be negative when too high
+                protein_item = protein_items[0]
+                current_grams = self.get_effective_grams(protein_item)
+                
+                # Calculate how much to reduce while ensuring we don't go below MIN_PROTEIN_GRAM
+                protein_per_gram = protein_item["protein(g)PerBaseGrams"] / protein_item["baseGrams"]
+                grams_to_reduce = abs(excess_protein) / protein_per_gram
+                
+                # Ensure we don't reduce below minimum
+                min_protein_grams = MIN_PROTEIN_GRAM if hasattr(self, 'MIN_PROTEIN_GRAM') else current_grams * 0.5  # fallback to 50% reduction if no min defined
+                max_reducible = current_grams - min_protein_grams
+                grams_to_reduce = min(grams_to_reduce, max_reducible)
+                
+                if grams_to_reduce > 0:
+                    scaler_reduction = grams_to_reduce / protein_item["baseGrams"]
+                    protein_item["scaler"] = max(0.1, protein_item["scaler"] - scaler_reduction)  # Ensure we don't go below 0.1 scaler
+                    return True
+            return False
+        
+        def reduce_carbs(excess_carbs):
+            """Reduce carbs when they're too high, first starch then veggies."""
+            if excess_carbs >= 0:  # Not excess
+                return False
+                
+            # First try to reduce starch
+            starch_items = [item for item in final_recipe if item["component"] == "starch"]
+            reduced = False
+            
+            if starch_items:
+                starch_item = starch_items[0]
+                current_grams = self.get_effective_grams(starch_item)
+                carbs_per_gram = starch_item["carbohydrate(g)PerBaseGrams"] / starch_item["baseGrams"]
+                
+                # Calculate how much we need to reduce
+                grams_to_reduce = abs(excess_carbs) / carbs_per_gram
+                
+                # Ensure we don't reduce below minimum starch amount
+                min_starch_grams = MIN_STARCH_GRAM if hasattr(self, 'MIN_STARCH_GRAM') else current_grams * 0.5  # fallback to 50%
+                max_reducible = current_grams - min_starch_grams
+                grams_to_reduce = min(grams_to_reduce, max_reducible)
+                
+                if grams_to_reduce > 0:
+                    scaler_reduction = grams_to_reduce / starch_item["baseGrams"]
+                    starch_item["scaler"] = max(0.1, starch_item["scaler"] - scaler_reduction)
+                    reduced = True
+            
+            # Recalculate and see if we still need to reduce carbs
+            if reduced:
+                current_nutrition = self.calculate_total_nutrition(final_recipe)
+                notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
+                excess_carbs = get_carbs_needed()
+            
+            # If still need to reduce carbs, try reducing veggies
+            if excess_carbs < 0:
+                veggie_items = [item for item in final_recipe if item["component"] == "veggies"]
+                if veggie_items:
+                    # Find veggie with highest carb content to reduce
+                    highest_carb_veggie = max(
+                        veggie_items, 
+                        key=lambda x: x["carbohydrate(g)PerBaseGrams"]
+                    )
+                    
+                    current_grams = self.get_effective_grams(highest_carb_veggie)
+                    carbs_per_gram = highest_carb_veggie["carbohydrate(g)PerBaseGrams"] / highest_carb_veggie["baseGrams"]
+                    
+                    # Calculate how much we need to reduce
+                    grams_to_reduce = abs(excess_carbs) / carbs_per_gram
+                    
+                    # Ensure we don't reduce below minimum veggie amount
+                    min_veggie_grams = MIN_VEGGIES_GRAM if hasattr(self, 'MIN_VEGGIES_GRAM') else current_grams * 0.5  # fallback to 50%
+                    max_reducible = current_grams - min_veggie_grams
+                    grams_to_reduce = min(grams_to_reduce, max_reducible)
+                    
+                    if grams_to_reduce > 0:
+                        scaler_reduction = grams_to_reduce / highest_carb_veggie["baseGrams"]
+                        highest_carb_veggie["scaler"] = max(0.1, highest_carb_veggie["scaler"] - scaler_reduction)
+                        return True
+            
+            return reduced
+            
+        # -------------------------
+        # Process the different cases in a logical order
+        # -------------------------
+        
+        # CASE 1: All three are low (calories, protein, and carbs)
+        if ('kcal too low' in notes and 
+            'protein(g) too low' in notes and 
+            'carbohydrate(g) too low' in notes):
+            
+            # First, try to add veggies for carbs
+            carbs_needed = get_carbs_needed()
+            add_veggies_for_carbs(carbs_needed)
+            
+            # Recalculate nutrition
             current_nutrition = self.calculate_total_nutrition(final_recipe)
             notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
             
-            # If still need calories after doubling sauce, carefully increase protein
+            # If still need carbs, try starch
+            if 'carbohydrate(g) too low' in notes:
+                carbs_needed = get_carbs_needed()
+                add_starch_for_carbs(carbs_needed)
+            
+            # Recalculate nutrition
+            current_nutrition = self.calculate_total_nutrition(final_recipe)
+            notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
+            
+            # Finally, address protein needs
+            if 'protein(g) too low' in notes:
+                protein_needed = get_protein_needed()
+                add_protein(protein_needed)
+                
+        # CASE 2: Calories and carbs are low (but protein is OK)
+        elif ('kcal too low' in notes and 
+             'carbohydrate(g) too low' in notes):
+            
+            # First, try to add veggies for carbs
+            carbs_needed = get_carbs_needed()
+            add_veggies_for_carbs(carbs_needed)
+            
+            # Recalculate nutrition
+            current_nutrition = self.calculate_total_nutrition(final_recipe)
+            notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
+            
+            # If still need carbs, try starch
+            if 'carbohydrate(g) too low' in notes:
+                carbs_needed = get_carbs_needed()
+                add_starch_for_carbs(carbs_needed)
+            
+            # Recalculate nutrition
+            current_nutrition = self.calculate_total_nutrition(final_recipe)
+            notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
+            
+            # If calories still low, try doubling sauce
             if 'kcal too low' in notes:
-                protein_items = [item for item in final_recipe if item["component"] == "protein"]
-                if protein_items:
-                    protein_item = protein_items[0]
-                    kcal_needed = float(notes.split("kcal too low: ")[1].split(" < ")[1]) - float(notes.split("kcal too low: ")[1].split(" < ")[0])
-                    kcal_per_gram = protein_item["kcalPerBaseGrams"] / protein_item["baseGrams"]
-                    grams_to_add = kcal_needed / kcal_per_gram
-                    
-                    # Check if it's a special protein item
-                    if (any(item.lower() in protein_item["ingredientName"].lower() 
-                        for item in SPECIAL_YOGURT_PROTEIN_ITEM_KEYWORDS)):
-                        current_grams = self.get_effective_grams(protein_item)
-                        max_additional_grams = max(0, MAX_SPECIAL_YOGURT_PROTEIN_GRAM - current_grams)
-                        grams_to_add = min(grams_to_add, max_additional_grams)
-                    
-                    protein_item["scaler"] += grams_to_add / protein_item["baseGrams"]
+                double_sauce()
         
+        # CASE 3: Calories and protein are low (but carbs are OK)
+        elif ('kcal too low' in notes and 
+             'protein(g) too low' in notes):
+            
+            # Address protein needs (will also help with calories)
+            protein_needed = get_protein_needed()
+            add_protein(protein_needed)
+            
+            # Recalculate nutrition
+            current_nutrition = self.calculate_total_nutrition(final_recipe)
+            notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
+            
+            # If calories still low, try doubling sauce
+            if 'kcal too low' in notes:
+                double_sauce()
+         # CASE 9: Calories low, protein low, carbs high
+        elif ('kcal too low' in notes and
+              'protein(g) too low' in notes and
+              'carbohydrate(g) too high' in notes):
+              
+            # First reduce carbs (starch/veggies) 
+            carbs_needed = get_carbs_needed()  # Will be negative
+            reduce_carbs(carbs_needed)
+            
+            # Then increase protein to address both protein and calories
+            current_nutrition = self.calculate_total_nutrition(final_recipe)
+            notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
+            
+            if 'protein(g) too low' in notes:
+                protein_needed = get_protein_needed()  # Will be positive
+                add_protein(protein_needed)
+
+        # CASE 8: Calories high and carbs high
+        elif ('kcal too high' in notes and 
+              'carbohydrate(g) too high' in notes and
+              'protein(g) too high' not in notes):
+            
+            # Reducing carbs will help with both issues at once
+            carbs_needed = get_carbs_needed()  # Will be negative when too high
+            reduce_carbs(carbs_needed)
+        
+                        
+        # CASE 7: Calories high and protein high (carbs are OK)
+        elif ('kcal too high' in notes and 
+              'protein(g) too high' in notes):
+            
+            # Reducing protein will help with both issues at once
+            protein_needed = get_protein_needed()  # Will be negative when too high
+            reduce_protein(protein_needed)
+
+        
+        # CASE 10: Calories high, protein low, carbs high
+        elif ('kcal too high' in notes and
+              'carbohydrate(g) too high' in notes):
+              
+            # Reduce carbs first
+            carbs_needed = get_carbs_needed()  # Will be negative
+            reduce_carbs(carbs_needed)
+            
+            # Recalculate
+            current_nutrition = self.calculate_total_nutrition(final_recipe)
+            notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
+            
         # Recalculate final nutrition
         current_nutrition = self.calculate_total_nutrition(final_recipe)
         return final_recipe, current_nutrition
-    
+   
+   
+   
     def solve(self, max_iterations=1000):
         """Modified solver with sequential ingredient adjustment strategy"""
         if not self.dish:
@@ -726,7 +988,7 @@ class NewDishOptimizer:
         # Set the veggies limit based on dish type
         self.is_special_fruit_snack = any(keyword in dish_name.lower() for keyword in SPECIAL_FRUIT_SNACK_DISH_KEYWORDS)
         veggies_limit = MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM if self.is_special_fruit_snack else MAX_VEGGIES_GRAM
-        protein_max = next((MAX_PROTEIN_PER_TYPE.get(i.get('protein_type', '').lower(), 500) for i in recipe if i.get('component') == 'protein' and i.get('protein_type', '').lower() != 'ignore'), 500)
+        self.protein_max = next((MAX_PROTEIN_PER_TYPE.get(i.get('protein_type', '').lower(), 500) for i in recipe if i.get('component') == 'protein' and i.get('protein_type', '').lower() != 'ignore'), 500)
         
         unique_components = set(item['component'] for item in recipe if item['component'] not in {'sauce', 'garnish'})
         non_sauce_garnish_kcal = sum(
@@ -743,7 +1005,7 @@ class NewDishOptimizer:
             if self.is_special_yogurt_protein:
                 recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
             else:
-                recipe = self.adjust_component_within_limit(recipe, 'protein', protein_max)
+                recipe = self.adjust_component_within_limit(recipe, 'protein', self.protein_max)
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
         
         # Initialize recipe with base scalers
@@ -775,7 +1037,7 @@ class NewDishOptimizer:
             if self.is_special_yogurt_protein:
                 recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
             else:
-                recipe = self.adjust_component_within_limit(recipe, 'protein', protein_max)
+                recipe = self.adjust_component_within_limit(recipe, 'protein', self.protein_max)
            
             # Get current state
             current_nutrition = self.calculate_total_nutrition(recipe)
