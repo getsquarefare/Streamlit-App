@@ -65,7 +65,10 @@ class AirTable():
             formula=formula)
         dish_all_ingrdts = []
         for dish_ingrdt in dish_all_ingrdts_rec:
-            dish_all_ingrdts.append(dish_ingrdt['fields']['Ingredient'])
+            ingredients = dish_ingrdt['fields'].get('Ingredients', [])
+            if ingredients == []:
+                continue
+            dish_all_ingrdts.append(ingredients)
         return dish_all_ingrdts
 
     def format_output_order_ingrdts(self, deleted_ingrdts):
