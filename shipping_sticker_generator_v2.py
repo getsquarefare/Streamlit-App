@@ -38,7 +38,7 @@ class AirTable():
         
     
     def get_all_open_orders(self): 
-        data = self.open_orders_table.all(fields=self.fields.values(),view='viwICiVvohvm7Zfuo')
+        data = self.open_orders_table.all(fields=self.fields.values(),view='viwrZHgdsYWnAMhtX')
         df = pd.DataFrame([record['fields'] for record in data])
         return df
 
@@ -124,6 +124,7 @@ def new_database_access():
     return AirTable()
 
 def generate_shipping_stickers(template_ppt):
+    template_ppt = Presentation(template_ppt)
     ac = new_database_access()
     data = ac.get_all_open_orders()
     cleaned_data = ac.process_data(data)
@@ -132,5 +133,7 @@ def generate_shipping_stickers(template_ppt):
     return prs
 
 if __name__ == "__main__":
-    generate_shipping_stickers('template/Shipping_Sticker_Template.pptx')
+    prs = generate_shipping_stickers('template/Shipping_Sticker_Template.pptx')
+    output_path = f'shippingsticker_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pptx'
+    prs.save(output_path)
     
