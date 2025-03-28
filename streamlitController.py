@@ -5,6 +5,8 @@ from datetime import datetime,timedelta
 from portionController import MealRecommendation  # Specific import
 from shipping_sticker_generator import *
 from shipping_sticker_generator_v2 import *
+from dish_sticker_generator_airtable import *
+from one_pager_generator import *  # Import for one pager generation
 from store_access import new_database_access  # Add this import
 import time
 from clientservings_excel_output import *
@@ -122,7 +124,7 @@ def main():
     # shipping_sticker_generator_v2
     st.divider()
     st.header(':blue[Shipping Sticker] Generator - Airtable 🚚')
-    st.markdown("⚠️ Source Table: [Open Orders > All](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwICiVvohvm7Zfuo?blocks=hide)")
+    st.markdown("⚠️ Source Table: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
     new_template_file_v2 = st.file_uploader(":blue[Optionally Upload template.pptx]", type="pptx",key="new_template_file_v2")
     if new_template_file_v2 is not None:
@@ -143,5 +145,53 @@ def main():
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
             )
 
+    # dish_sticker_generator
+    st.divider()
+    st.header(':orange[Dish Sticker] Generator - Airtable 🥡 🍱')
+    st.markdown("⚠️ Source Table: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
+    st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
+    new_dish_sticker_template = st.file_uploader(":blue[Optionally Upload a new Dish_Sticker_Template.pptx]", type="pptx",key="new_dish_sticker_template")
+    if new_dish_sticker_template is not None:
+        prs_file = Presentation(new_dish_sticker_template)
+    else:
+        prs_file = Presentation('template/Dish_Sticker_Template.pptx')
+    
+    dish_sticker_generate_button = st.button("Generate Dish Stickers")
+    if dish_sticker_generate_button:
+        with st.spinner('Generating dish stickers... It may take a few minutes 🕐'):
+            prs = generate_dish_stickers(prs_file)
+            updated_ppt_name = f'{current_date}_dish_sticker.pptx'
+            prs.save(updated_ppt_name)
+        with open(updated_ppt_name, "rb") as file:
+            st.download_button(
+                label="Download Stickers",
+                data=file,
+                file_name=updated_ppt_name,
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            )   
+
+    # one_pager_generator
+    st.divider()
+    st.header(':green[One-Sheeter] Generator - Airtable 📑')
+    st.markdown("⚠️ Source Table: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
+    st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
+    new_one_pager_template = st.file_uploader(":blue[Optionally Upload a new One_Pager_Template.pptx]", type="pptx",key="new_one_pager_template")
+    if new_one_pager_template is not None:
+        prs_file = Presentation(new_one_pager_template)
+    else:
+        prs_file = Presentation('template/One_Pager_Template.pptx')
+    one_sheeter_generate_button = st.button("Generate One-Sheeter")
+    if one_sheeter_generate_button:
+        with st.spinner('Generating One-Sheeter... It may take a few minutes 🕐'):
+            prs = generate_one_pagers(prs_file)
+            updated_ppt_name = f'{current_date}__one_sheeter.pptx'
+            prs.save(updated_ppt_name)
+        with open(updated_ppt_name, "rb") as file:
+            st.download_button(
+                label="Download One-Sheeter",
+                data=file,
+                file_name=updated_ppt_name,
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            ) 
 if __name__ == "__main__":
     main()
