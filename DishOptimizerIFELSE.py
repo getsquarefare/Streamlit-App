@@ -5,6 +5,7 @@ import math
 SPECIAL_YOGURT_PROTEIN_ITEM_KEYWORDS = ["overnight oats", "yogurt", "yoghurt"]
 MAX_SPECIAL_YOGURT_PROTEIN_GRAM = 400
 MAX_SPECIAL_YOGURT_PROTEIN_ITEM_TOTAL_MEAL = 500
+MAX_SPECIAL_YOGURT_VEGGIES_GRAM = 20
 SPECIAL_FRUIT_SNACK_DISH_KEYWORDS = ['seasonal fruit salad']
 MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM = 220
 MAX_VEGGIES_GRAM = 300
@@ -436,7 +437,13 @@ class NewDishOptimizer:
                 self.get_effective_grams(x) if i != idx else x['baseGrams'] * new_scaler
                 for i, x in enumerate(recipe) if x['component'] == 'veggies'
             )
-            if potential_grams > MAX_VEGGIES_GRAM:
+            if self.is_special_yogurt_protein:
+                if potential_grams > MAX_SPECIAL_YOGURT_VEGGIES_GRAM:
+                    return False
+            elif self.is_special_fruit_snack:
+                if potential_grams > MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM:
+                    return False
+            elif potential_grams > MAX_VEGGIES_GRAM:
                 return False
                 
         elif component == 'starch':
@@ -732,9 +739,9 @@ class NewDishOptimizer:
                 # Check if it's a special protein item
                 if (any(item.lower() in protein_item["ingredientName"].lower() 
                     for item in SPECIAL_YOGURT_PROTEIN_ITEM_KEYWORDS)):
-                    current_grams = self.get_effective_grams(protein_item)
-                    max_additional_grams = max(0, MAX_SPECIAL_YOGURT_PROTEIN_GRAM - current_grams)
-                    grams_to_add = min(grams_to_add, max_additional_grams)
+                        current_grams = self.get_effective_grams(protein_item)
+                        max_additional_grams = max(0, MAX_SPECIAL_YOGURT_PROTEIN_GRAM - current_grams)
+                        grams_to_add = min(grams_to_add, max_additional_grams)
                 else:
                     # Regular protein item
                     remaining_protein_capacity = self.protein_max - sum(self.get_effective_grams(item) for item in final_recipe if item["component"] == "protein")
@@ -1004,6 +1011,7 @@ class NewDishOptimizer:
             recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
             if self.is_special_yogurt_protein:
                 recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
+                recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_YOGURT_VEGGIES_GRAM)
             else:
                 recipe = self.adjust_component_within_limit(recipe, 'protein', self.protein_max)
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
@@ -1031,13 +1039,14 @@ class NewDishOptimizer:
 
         for iteration in range(max_iterations):
             # Enforce component limits
-            recipe = self.adjust_component_within_limit(recipe, 'veggies', veggies_limit)
             recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
             recipe = self.adjust_component_above_minimum(recipe, 'starch', MIN_STARCH_GRAM)
             if self.is_special_yogurt_protein:
                 recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
+                recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_YOGURT_VEGGIES_GRAM)
             else:
                 recipe = self.adjust_component_within_limit(recipe, 'protein', self.protein_max)
+                recipe = self.adjust_component_within_limit(recipe, 'veggies', veggies_limit)
            
             # Get current state
             current_nutrition = self.calculate_total_nutrition(recipe)
