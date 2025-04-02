@@ -2,7 +2,7 @@ import numpy as np
 import random
 import math
 
-SPECIAL_YOGURT_PROTEIN_ITEM_KEYWORDS = ["overnight oats", "yogurt", "yoghurt"]
+SPECIAL_YOGURT_PROTEIN_ITEM_KEYWORDS = ["overnight oats", "yogurt", "yoghurt","parfait"]
 MAX_SPECIAL_YOGURT_PROTEIN_GRAM = 400
 MAX_SPECIAL_YOGURT_PROTEIN_ITEM_TOTAL_MEAL = 500
 MAX_SPECIAL_YOGURT_VEGGIES_GRAM = 20
@@ -993,26 +993,39 @@ class NewDishOptimizer:
         )
         
         # Set the veggies limit based on dish type
-        self.is_special_fruit_snack = any(keyword in dish_name.lower() for keyword in SPECIAL_FRUIT_SNACK_DISH_KEYWORDS)
         veggies_limit = MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM if self.is_special_fruit_snack else MAX_VEGGIES_GRAM
+        # Check if the dish is a special fruit snack
+        self.is_special_fruit_snack = any(keyword in dish_name.lower() for keyword in SPECIAL_FRUIT_SNACK_DISH_KEYWORDS)
+        # Set up the max protein limit based on the protein type
         self.protein_max = next((MAX_PROTEIN_PER_TYPE.get(i.get('protein_type', '').lower(), 500) for i in recipe if i.get('component') == 'protein' and i.get('protein_type', '').lower() != 'ignore'), 500)
         
+        # Check if the dish only contains one or two components (excluding sauce and garnish)
         unique_components = set(item['component'] for item in recipe if item['component'] not in {'sauce', 'garnish'})
         non_sauce_garnish_kcal = sum(
             item['kcalPerBaseGrams'] for item in recipe if item['component'] not in {'sauce', 'garnish'}
         )
-        if (len(unique_components) <= 2):
+        sauce_garnish_kcal = sum(
+            item['kcalPerBaseGrams'] for item in recipe if item['component'] in {'sauce', 'garnish'}
+        )
+
+        if (len(unique_components) == 1):
+            for item in recipe:
+                item['scaler'] = round((self.customer_requirements['kcal'] - sauce_garnish_kcal) / non_sauce_garnish_kcal)
+            return self.format_result(recipe, self.calculate_total_nutrition(recipe))
+        elif (len(unique_components) <= 2):
             for item in recipe:
                 if item['component'] in {'sauce', 'garnish'}:
                     item['scaler'] = 1
                 else:
-                    item['scaler'] = self.customer_requirements['kcal'] / non_sauce_garnish_kcal * (1- (len(unique_components) - 1) * 0.5)
-            recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_VEGGIES_GRAM)
-            recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
+                    item['scaler'] = (self.customer_requirements['kcal'] - sauce_garnish_kcal) / non_sauce_garnish_kcal
             if self.is_special_yogurt_protein:
                 recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
                 recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_YOGURT_VEGGIES_GRAM)
+            elif self.is_special_fruit_snack:
+                recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM)
             else:
+                recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_VEGGIES_GRAM)
+                recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
                 recipe = self.adjust_component_within_limit(recipe, 'protein', self.protein_max)
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
         
@@ -1035,6 +1048,11 @@ class NewDishOptimizer:
                     calorie_ratio = self.customer_requirements['kcal'] / initial_nutrition['kcal']
                     ing['scaler'] = nutrition_ratio
 
+        if self.is_special_yogurt_protein:
+                recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
+                recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_YOGURT_VEGGIES_GRAM)
+        elif self.is_special_fruit_snack:
+                recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM)
         
 
         for iteration in range(max_iterations):
