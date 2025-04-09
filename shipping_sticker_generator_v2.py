@@ -124,7 +124,6 @@ def new_database_access():
     return AirTable()
 
 def generate_shipping_stickers(template_ppt):
-    template_ppt = Presentation(template_ppt)
     ac = new_database_access()
     data = ac.get_all_open_orders()
     cleaned_data = ac.process_data(data)
