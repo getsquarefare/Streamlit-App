@@ -1008,7 +1008,7 @@ class NewDishOptimizer:
             item['kcalPerBaseGrams'] for item in recipe if item['component'] in {'sauce', 'garnish'}
         )
 
-        if (len(unique_components) == 1):
+        if (len(recipe) == 1):
             for item in recipe:
                 item['scaler'] = round((self.customer_requirements['kcal'] - sauce_garnish_kcal) / non_sauce_garnish_kcal)
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
