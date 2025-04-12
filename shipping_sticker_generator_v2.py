@@ -171,7 +171,6 @@ def generate_ppt(df, prs):
         if df.empty:
             logger.warning("No data available to generate PowerPoint")
             raise ValueError("No shipping data available to generate stickers. Please check the Airtable data.")
-        prs = Presentation(prs)
         if len(prs.slides) == 0:
             logger.error("Template presentation has no slides")
             raise PPTGenerationError("The template presentation has no slides. Please check the template file.")
@@ -343,7 +342,8 @@ def streamlit_shipping_sticker_generator():
 
 if __name__ == "__main__":
     try:
-        prs = generate_shipping_stickers('template/Shipping_Sticker_Template.pptx')
+        prs_file = Presentation('template/Shipping_Sticker_Template.pptx')
+        prs = generate_shipping_stickers(prs_file)
         output_path = f'shippingsticker_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pptx'
         prs.save(output_path)
         print(f"Stickers successfully generated and saved to {output_path}")
