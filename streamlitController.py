@@ -128,7 +128,7 @@ def main():
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
     # Template uploader with error handling
-    new_template_file_v2 = st.file_uploader(":blue[Optionally Upload template.pptx]", type="pptx", key="new_template_file_v2")
+    new_template_file_v2 = st.file_uploader(":blue[Optionally Upload Shipping_Sticker_Template.pptx]", type="pptx", key="new_template_file_v2")
 
     # Template validation
     try:
@@ -233,7 +233,7 @@ def main():
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
     # File upload for template
-    new_one_pager_template = st.file_uploader(":blue[Upload PowerPoint Template]", 
+    new_one_pager_template = st.file_uploader(":blue[Optionally Upload new One_Pager_Template.pptx]", 
                                             type="pptx", 
                                             key="new_one_pager_template",
                                             help="Include instruction slide as second slide")
