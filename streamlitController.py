@@ -238,8 +238,9 @@ def main():
                                             key="new_one_pager_template",
                                             help="Include instruction slide as second slide")
 
+    st.markdown("⚠️ Please make sure all meal stickers are generated before running this one-sheeter generator")
     # Generate button
-    one_sheeter_generate_button = st.button("Generate One-Sheeter")
+    one_sheeter_generate_button = st.button("Yes I ran the meal sticker already, now lets generate One-Sheeter")
 
     if one_sheeter_generate_button:
         with st.spinner('Generating One-Sheeter... It may take a few minutes 🕐'):
