@@ -15,7 +15,7 @@ MAX_PROTEIN_PER_TYPE = {"meat": 200, "fish": 220, "tofu": 350, "vegan": 200}
 
 class NewDishOptimizer:
     def __init__(self, grouped_ingredients, customer_requirements, nutrients, nutrient_constraints,
-                 garnish_grams=None, sauce_grams=None, veggie_ge_starch=True, 
+                 garnish_grams=None, double_sauce=False, veggie_ge_starch=True, 
                  min_meat_per_100_cal=None, max_meal_grams_per_100_cal=None, dish=None):
         """ print(f"Initialized Dish Optimizer with {len(grouped_ingredients)} ingredients/n")
         print(f"grouped_ingredients: {grouped_ingredients}\n")
@@ -34,7 +34,8 @@ class NewDishOptimizer:
         self.nutrients = nutrients
         self.nutrient_constraints = nutrient_constraints
         self.garnish_grams = garnish_grams
-        self.sauce_grams = sauce_grams
+        #self.sauce_grams = sauce_grams
+        self.double_sauce = double_sauce
         self.veggie_ge_starch = veggie_ge_starch
         self.min_meat_per_100_cal = min_meat_per_100_cal
         self.max_meal_grams_per_100_cal = max_meal_grams_per_100_cal
@@ -227,11 +228,11 @@ class NewDishOptimizer:
         """
         try:
             # Check sauce constraint
-            if self.sauce_grams is not None:
+            """ if self.sauce_grams is not None:
                 sauce_total = sum(self.get_effective_grams(i) for i in recipe if i['component'] == 'sauce')
                 if sauce_total != self.sauce_grams:
                     # print(f"Sauce constraint violation: {sauce_total:.1f}g vs required {self.sauce_grams}g")
-                    return False
+                    return False """
 
             # Check veggie >= starch constraint
             if self.veggie_ge_starch:
@@ -1014,8 +1015,13 @@ class NewDishOptimizer:
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
         elif (len(unique_components) <= 2):
             for item in recipe:
-                if item['component'] in {'sauce', 'garnish'}:
-                    item['scaler'] = 1
+                if item['component'] == 'sauce':
+                    if self.double_sauce:
+                        item['scaler'] = 2.0
+                    else:
+                        item['scaler'] = 1.0
+                elif item['component'] == 'garnish':
+                    item['scaler'] = 1.0
                 else:
                     item['scaler'] = (self.customer_requirements['kcal'] - sauce_garnish_kcal) / non_sauce_garnish_kcal
             if self.is_special_yogurt_protein:
@@ -1034,8 +1040,11 @@ class NewDishOptimizer:
         veggie_count = sum(1 for item in recipe if item['component'] == 'veggies')
         if initial_nutrition['kcal'] > 0:
             for ing in recipe:
-                if ing['component'] == 'sauce' and self.sauce_grams:
-                    ing['scaler'] = self.sauce_grams / ing['baseGrams'] if ing['baseGrams'] else 1.0
+                if ing['component'] == 'sauce':
+                    if self.double_sauce:
+                        ing['scaler'] = 2.0
+                    else:
+                        ing['scaler'] = 1.0
                 elif ing['component'] == 'garnish':
                     ing['scaler'] = 1.0
                 else:

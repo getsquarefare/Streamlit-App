@@ -217,11 +217,11 @@ class AirTable():
         result = dict()
         formula['id'] = recId
         fields_to_return = ['identifier', 'First_Name', 'Last_Name', 'goal_calories', 'goal_carbs(g)',
-                            'goal_fiber(g)', 'goal_fat(g)', 'goal_protein(g)', 'Portion Algo Constraints', 'Meal','# of snacks per day']
+                            'goal_fiber(g)', 'goal_fat(g)', 'goal_protein(g)', 'Portion Algo Constraints', 'Meal','# of snacks per day','Double Sauce']
         ingredients = self.client_table.get(recId)
         if ingredients:
             for field in fields_to_return:
-                result[field] = ingredients['fields'][field]
+                result[field] = ingredients['fields'].get(field, None)
             return result
         else:
             return None

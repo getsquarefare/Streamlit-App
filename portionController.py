@@ -132,6 +132,7 @@ class MealRecommendation:
         # Retrieve additional constraints
         # Param - Sauce Grams
         sauce_grams = constraints.get("Sauce Amount", None)
+        double_sauce = customer_requirements.get("Double Sauce", None)
         # Param - Veggie Ge Starch
         veggie_ge_starch = constraints.get("Veggie >= Starch", None)
         # Param - Min Meat per 100 Cal
@@ -140,7 +141,7 @@ class MealRecommendation:
         max_meal_grams_per_100_cal = constraints.get(
             "Maximum Meal Grams Per 100KCal", None
         )
-
+        
         garnish_grams = 0
         # Param - Grouped Ingredients: use a normal dictionary to group different ingredients by
         # their components to ensure that ingredients from a component are scaled together
@@ -170,7 +171,7 @@ class MealRecommendation:
             nutrients,
             nutrient_constraints,
             garnish_grams,
-            sauce_grams,
+            double_sauce,
             veggie_ge_starch,
             min_meat_per_100_cal,
             max_meal_grams_per_100_cal,
