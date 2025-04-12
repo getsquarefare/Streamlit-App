@@ -9,6 +9,10 @@ from pyairtable.formulas import match
 from dotenv import load_dotenv
 from functools import cache
 import math
+import os
+import xml.etree.ElementTree as ET
+from lxml import etree
+from pptx.oxml import parse_xml
 
 class AirTable():
     def __init__(self, ex_api_key=None):
@@ -28,7 +32,13 @@ class AirTable():
             'CLIENT': 'fldjEgeRh2bGxajXT',            
             'DISH_STICKER': 'fldYZYDRjScz6ig5a',       
             'DELIVERY_DAY': 'flddRJziNBdEtrpmG', 
-            'PORTIONS': 'fldCsBzoy9rxKlWmN'         
+            'PORTIONS': 'fldCsBzoy9rxKlWmN',
+            'SHIPPING_ADDRESS_1': 'flddnU6Y02iIHp16G',
+            'SHIPPING_CITY': 'fldBIgt7ce5fEYLDG',
+            'SHIPPING_PROVINCE': 'fldGeLuYoGKiw227Y',
+            'SHIPPING_COUNTRY': 'fldnP3H74kAXKaIhN',
+            'SHIPPING_POSTAL_CODE': 'fldwqwf7WSbiP0hJg',
+            'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W'      
         }
         
         # Define field mappings for clients info
@@ -40,7 +50,8 @@ class AirTable():
             'FAT': 'fldMSEudjCwovSD8A',
             'FIBER': 'fld1TirSqBsA1GqK5',
             'CLIENT_FNAME': 'fldGBn8BpGwFIHxgi',
-            'CLIENT_LNAME': 'fldIq6giA1dDcut8T'
+            'CLIENT_LNAME': 'fldIq6giA1dDcut8T',
+            'TAGS':'fldKdacQ9GMB070cD'
         }
     
     def get_open_orders(self):
@@ -55,12 +66,11 @@ class AirTable():
     
     def get_clients_info(self):
         data = self.clients_table.all(fields=self.clients_fields.values())  # Replace with actual view ID
-        
+        print('Data from clients table:', data)
         # Create DataFrame and map column names
         df = pd.DataFrame([{**record['fields'], 'id': record['id']} for record in data])
         column_mapping = {v.replace('fld', ''): k for k, v in self.clients_fields.items()}
         df.rename(columns=column_mapping, inplace=True)
-        
         return df
     
     def process_data(self):
@@ -73,7 +83,9 @@ class AirTable():
         df_clients.columns = [col.strip() for col in df_clients.columns]
         
         # Process client servings data
-        df_orders = df_orders[['Delivery Date', 'Meal Sticker', 'Order Type', 'To_Match_Client_Nutrition']].dropna()
+        df_orders = df_orders[['Delivery Date', 'Meal Sticker', 'Order Type', 'To_Match_Client_Nutrition',
+                              'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
+                              'Shipping Province', 'Shipping Postal Code', 'Shipping Country']].dropna(subset=['To_Match_Client_Nutrition'])
         
         # Convert any list values to strings in all relevant columns
         # For client identifier
@@ -107,7 +119,13 @@ class AirTable():
             'To_Match_Client_Nutrition': 'first', 
             'page_number': 'first', 
             'Delivery Date': 'first',
-            'Order Type': 'first'
+            'Order Type': 'first',
+            'Shipping Address 1': 'first',
+            'Shipping Address 2': 'first',
+            'Shipping City': 'first',
+            'Shipping Province': 'first',
+            'Shipping Postal Code': 'first',
+            'Shipping Country': 'first'
         })).reset_index(drop=True)
         
         # Calculate portion strings with appropriate line breaks
@@ -136,51 +154,148 @@ class AirTable():
             lambda x: '\n\n'.join([str(item) for item in x])
         ).reset_index(drop=True)
         
-        # Process client nutritional information
-        df_clients_grouped = pd.DataFrame(
-            df_clients.groupby('id').agg({
-                'id': 'first',
-                'First_Name': 'first',
-                'Last_Name': 'first'
-            })
-        ).reset_index(drop=True)
-        
+        meal_order = ['breakfast', 'lunch', 'dinner', 'snack']
         # Format nutrition information from individual components
-        nutrition_lines = []
         for _, row in df_clients.iterrows():
-            nutrition_line = ""
-            if 'goal_calories' in row and not pd.isna(row['goal_calories']):
-                nutrition_line += f"{row['goal_calories']} kcals | "
-            if 'goal_carbs(g)' in row and not pd.isna(row['goal_carbs(g)']):
-                nutrition_line += f"{row['goal_carbs(g)']}g carbs, "
-            if 'goal_protein(g)' in row and not pd.isna(row['goal_protein(g)']):
-                nutrition_line += f"{row['goal_protein(g)']}g protein, "
-            if 'goal_fat(g)' in row and not pd.isna(row['goal_fat(g)']):
-                nutrition_line += f"{row['goal_fat(g)']}g fat, "
-            if 'goal_fiber(g)' in row and not pd.isna(row['goal_fiber(g)']):
-                nutrition_line += f"{row['goal_fiber(g)']}g fiber"
+            if 'Customization Tags' in row and isinstance(row['Customization Tags'], list) and "No Nutrition Data in Sheet" in row['Customization Tags']:
+                nutrition_line = ''
+            elif 'goal_calories' in row and not pd.isna(row['goal_calories']) and row['goal_calories'] > 0:
+                nutrition_line = row['identifier'].split('|')[1].strip() + ' Nutrition target per serving: '
+                nutrition_line += f"{int(row['goal_calories'])} kcals | "
+                if 'goal_carbs(g)' in row and not pd.isna(row['goal_carbs(g)']) and row['goal_carbs(g)'] > 0:
+                    nutrition_line += f"{int(row['goal_carbs(g)'])}g carbs, "
+                if 'goal_protein(g)' in row and not pd.isna(row['goal_protein(g)']) and row['goal_protein(g)'] > 0:
+                    nutrition_line += f"{int(row['goal_protein(g)'])}g protein, "
+                if 'goal_fat(g)' in row and not pd.isna(row['goal_fat(g)']) and row['goal_fat(g)'] > 0:
+                    nutrition_line += f"{int(row['goal_fat(g)'])}g fat, "
+                if 'goal_fiber(g)' in row and not pd.isna(row['goal_fiber(g)']) and row['goal_fiber(g)'] > 0:
+                    nutrition_line += f"{int(row['goal_fiber(g)'])}g fiber"
             
             df_clients.loc[_, 'NUTRITION'] = nutrition_line
         
         # Now group the nutrition info
-        df_clients_grouped['NUTRITION'] = df_clients.groupby('id')['NUTRITION'].apply(
+        df_clients['NUTRITION'] = df_clients.groupby('id')['NUTRITION'].apply(
             lambda x: '\n'.join(filter(None, x))
         ).reset_index(drop=True)
+
+        df_clients['consolidated_nutrition'] = ""
+
+        # Extract the relevant parts of the ID for grouping
+        df_clients['group_key'] = df_clients['identifier'].apply(lambda x: "".join(x.split("|")[::2]) if isinstance(x, str) else x)
+
+        # Consolidate nutrition lines for rows with the same group_key
+        meal_order = ['breakfast', 'lunch', 'dinner', 'snack']
+
+        def sort_nutrition_lines(lines):
+            def meal_sort_key(line):
+                for i, meal in enumerate(meal_order):
+                    if line.lower().startswith(meal):
+                        return i
+                return len(meal_order)  # if not found, put it at the end
+            sorted_lines = sorted(filter(None, lines), key=meal_sort_key)
+            return '\n'.join(sorted_lines)
+
+        consolidated_nutrition_map = df_clients.groupby('group_key')['NUTRITION'].apply(
+            sort_nutrition_lines
+        ).to_dict()
+
+        # Map the consolidated nutrition back to each row
+        df_clients['consolidated_nutrition'] = df_clients['group_key'].map(consolidated_nutrition_map)
+
+        # Drop the temporary group_key column
+        # df_clients.drop(columns=['group_key'], inplace=True)
         
         # Rename client column in grouped dataframes for merging
         df_orders_grouped.rename(columns={'To_Match_Client_Nutrition': 'CLIENT'}, inplace=True)
-        df_clients_grouped.rename(columns={'id': 'CLIENT'}, inplace=True)
+        df_clients.rename(columns={'id': 'CLIENT'}, inplace=True)
         
         # Ensure client names are cleaned
         df_orders_grouped.CLIENT = df_orders_grouped.CLIENT.apply(lambda x: str(x).strip() if isinstance(x, str) else x)
-        df_clients_grouped.CLIENT = df_clients_grouped.CLIENT.apply(lambda x: str(x).strip() if isinstance(x, str) else x)
-        
+        df_clients.CLIENT = df_clients.CLIENT.apply(lambda x: str(x).strip() if isinstance(x, str) else x)
+        df_clients.NUTRITION=df_clients['consolidated_nutrition'].fillna('')
         # Merge the two dataframes
-        df_merge = df_orders_grouped.merge(df_clients_grouped, on='CLIENT', how='left')
-        df_merge.NUTRITION = df_merge.NUTRITION.fillna('')
+        df_merge = df_orders_grouped.merge(df_clients, on='CLIENT', how='left').sort_values(by=['First_Name', 'Last_Name'])
+       
+        # Create a unique client identifier
+        df_merge['CLIENT_UNIQUE_ID'] = df_merge['First_Name'].fillna('') + ' ' + df_merge['Last_Name'].fillna('')
+        df_merge['CLIENT_UNIQUE_ID'] = df_merge['CLIENT_UNIQUE_ID'].apply(lambda x: x.strip())
+        df_merge = df_merge.sort_values(by=['CLIENT_UNIQUE_ID'])
         
+        # Create a concatenated shipping address for household grouping
+        # Normalize address components by converting to lowercase and stripping whitespace
+        address_components = ['Shipping Address 1', 'Shipping Address 2', 'Shipping Postal Code']
+        
+        # Check if we have the shipping address fields
+        has_address_fields = any(field in df_merge.columns for field in address_components)
+        
+        if has_address_fields:
+            # Normalize and combine address components
+            for field in address_components:
+                if field in df_merge.columns:
+                    df_merge[field] = df_merge[field].fillna('').astype(str).str.lower().str.strip()
+            
+            # Create a combined address string for grouping - ignoring recipient name
+            df_merge['COMPLETE_ADDRESS'] = ''
+            for field in address_components:
+                if field in df_merge.columns:
+                    df_merge['COMPLETE_ADDRESS'] += df_merge[field] + '|'
+            
+            # Group orders by client and get the first address for each client
+            # This creates a mapping of clients to their addresses
+            client_addresses = df_merge.groupby('CLIENT').agg({
+                'COMPLETE_ADDRESS': 'first'
+            }).reset_index()
+            
+            # Create a dictionary to map clients to their addresses
+            address_map = dict(zip(client_addresses['CLIENT'], client_addresses['COMPLETE_ADDRESS']))
+            
+            # Apply this mapping to get consistent addresses for all orders from the same client
+            df_merge['HOUSEHOLD_GROUP'] = df_merge['CLIENT'].map(address_map)
+            
+            # If mapping failed for any reason, use the client as fallback
+            df_merge['HOUSEHOLD_GROUP'] = df_merge['HOUSEHOLD_GROUP'].fillna(df_merge['CLIENT'])
+            
+            print("Grouping households by shipping address")
+        else:
+            # Fallback to using last name as proxy for household
+            df_merge['HOUSEHOLD_GROUP'] = df_merge['Last_Name'].fillna('Unknown')
+            print("Shipping address fields not available, grouping households by last name instead")
+            
+        # Add household member info - will be used for the first sheet of each household
+        household_members = {}
+        for household_id in df_merge['HOUSEHOLD_GROUP'].unique():
+            # Get unique clients in this household by their full names
+            members = df_merge[df_merge['HOUSEHOLD_GROUP'] == household_id][['CLIENT_UNIQUE_ID']].drop_duplicates()
+            member_list = [name for name in members['CLIENT_UNIQUE_ID'] if name.strip()]
+            household_members[household_id] = member_list
+        
+        # Add this info to the dataframe
+        df_merge['HOUSEHOLD_MEMBERS'] = df_merge['HOUSEHOLD_GROUP'].map(
+            lambda x: "\n".join(household_members[x])
+        )
+        
+        # Mark first client in each household
+        """ df_merge['FIRST_IN_HOUSEHOLD'] = False
+        for household in df_merge['HOUSEHOLD_GROUP'].unique():
+            household_indices = df_merge[df_merge['HOUSEHOLD_GROUP'] == household].index
+            if len(household_indices) > 0:
+                df_merge.loc[household_indices[0], 'FIRST_IN_HOUSEHOLD'] = True """
+        
+        df_merge['line_household_label'] = df_merge.apply(
+            lambda row:
+                       ("Household Members:" if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1 else ""),
+            axis=1
+        )
         # Generate final text fields
-        df_merge['line_1'] = "Prepared for: " + df_merge['First_Name'] + " " + df_merge['Last_Name'] 
+        df_merge['line_household'] = df_merge.apply(
+            lambda row:
+                       (row['HOUSEHOLD_MEMBERS'] if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1 else ""),
+            axis=1
+        )
+
+        df_merge['line_preparedFor'] = df_merge.apply(
+            lambda row:"Prepared for: " + (row['First_Name'] or '') + " " + (row['Last_Name'] or ''),axis=1
+        )
         
         # Add best before date (delivery date + 3 days)
         def add_days(date_str, days=3):
@@ -199,12 +314,20 @@ class AirTable():
             end_date = date + timedelta(days=days)
             return end_date.strftime('%m/%d/%Y')
         
-        df_merge['Best Before'] = df_merge['Delivery Date'].apply(lambda x: add_days(x, 3))
-        df_merge['line_2'] = "Best before: " + df_merge['Best Before']
-        df_merge['line_3'] = df_merge['Delivery Date'] + " Delivery"
-        df_merge['line_4'] = 'Nutrition target per serving: ' + df_merge.NUTRITION
-        df_merge['line_5'] = df_merge.portion_list
-        df_merge['line_6'] = df_merge.dish_list
+        df_merge['line_bestBefore'] = "Best before: " + df_merge['Delivery Date'].apply(lambda x: add_days(x, 3))
+        df_merge['line_deliveryDate'] = df_merge['Delivery Date'] + " Delivery"
+        df_merge['line_nutrition'] = df_merge.NUTRITION
+        df_merge['line_portion'] = df_merge.portion_list
+        df_merge['line_dishes'] = df_merge.dish_list
+        
+        # Sort by household group to ensure all members of the same household are together
+        df_merge = df_merge.sort_values(by=['HOUSEHOLD_GROUP', 'First_Name', 'Last_Name', 'page_number'])
+        
+        # Debug log to show household groupings
+        print(f"Total households: {len(df_merge['HOUSEHOLD_GROUP'].unique())}")
+        for household in df_merge['HOUSEHOLD_GROUP'].unique():
+            members = df_merge[df_merge['HOUSEHOLD_GROUP'] == household]['CLIENT_UNIQUE_ID'].unique()
+            print(f"Household '{household}': {', '.join(members)}")
         
         return df_merge
 
@@ -217,54 +340,199 @@ def insert_background(slide, img_path):
     slide.shapes._spTree.insert(2, pic._element)
     return slide
 
-# Function to copy a slide from a template
-def copy_slide(template, target_prs):
-    new_slide = target_prs.slides.add_slide(template.slide_layout)
-    for shape in new_slide.shapes:
-        sp = shape._element
-        sp.getparent().remove(sp)
-    for shape in template.shapes:
-        if not shape.has_text_frame:
-            continue
-        new_shape = copy.deepcopy(shape)
-        new_slide.shapes._spTree.insert_element_before(new_shape._element, 'p:extLst')
-    return new_slide
+# Function to copy a slide with images properly
+def copy_slide_with_images(source_slide, target_prs):
+    """
+    Copy a slide including all images and other elements
+    
+    Parameters:
+    source_slide (Slide): Source slide to copy
+    target_prs (Presentation): Target presentation to add the slide to
+    
+    Returns:
+    Slide: The new slide in the target presentation
+    """
+    # Add a new slide with the same layout
+    target_slide = target_prs.slides.add_slide(source_slide.slide_layout)
+    
+    # Keep track of image shapes to process separately
+    image_paths = []
+    
+    # Copy all shapes
+    for shape in source_slide.shapes:
+        if hasattr(shape, 'image') and shape.image:
+            # For image shapes, extract and save the image temporarily
+            image_data = shape.image.blob
+            image_path = f"temp_image_{shape.shape_id}.png"
+            with open(image_path, "wb") as f:
+                f.write(image_data)
+            image_paths.append((image_path, shape.left, shape.top, shape.width, shape.height))
+        else:
+            # For non-image shapes, try to copy the XML element
+            try:
+                element = shape.element
+                newel = copy.deepcopy(element)
+                target_slide.shapes._spTree.insert_element_before(newel, 'p:extLst')
+            except Exception as e:
+                print(f"Error copying shape: {e}")
+    
+    # Add the images to the new slide
+    for image_path, left, top, width, height in image_paths:
+        try:
+            target_slide.shapes.add_picture(image_path, left, top, width=width, height=height)
+        except Exception as e:
+            print(f"Error adding image: {e}")
+        finally:
+            # Clean up temporary file
+            if os.path.exists(image_path):
+                os.remove(image_path)
+    
+    return target_slide
+
+# Function to insert an instruction sheet
+def insert_instruction_sheet(prs, instruction_template_path=None):
+    """
+    Insert an instruction sheet using either a template file or the default template
+    
+    Parameters:
+    prs (Presentation): PowerPoint presentation to add the slide to
+    instruction_template_path (str): Path to the instruction template file
+    
+    Returns:
+    Presentation: Updated presentation with instruction sheet added
+    """
+    if instruction_template_path and os.path.exists(instruction_template_path):
+        # Check file extension
+        file_ext = os.path.splitext(instruction_template_path)[1].lower()
+        
+        if file_ext == '.pdf':
+            # For PDF files, create a slide with a note to refer to the PDF
+            blank_slide = prs.slides.add_slide(prs.slide_layouts[5])  # Blank layout
+            
+            # Add title
+            if hasattr(blank_slide, 'shapes') and hasattr(blank_slide.shapes, 'title') and blank_slide.shapes.title:
+                blank_slide.shapes.title.text = "Cooking Instructions"
+            else:
+                # Add a title text box if the layout doesn't have a title placeholder
+                left = Inches(1)
+                top = Inches(0.5)
+                width = Inches(8)
+                height = Inches(1)
+                title_box = blank_slide.shapes.add_textbox(left, top, width, height)
+                title_box.text_frame.text = "Cooking Instructions"
+            
+            # Add instruction text
+            left = Inches(1)
+            top = Inches(2)
+            width = Inches(8)
+            height = Inches(5)
+            textbox = blank_slide.shapes.add_textbox(left, top, width, height)
+            text_frame = textbox.text_frame
+            p = text_frame.add_paragraph()
+            p.text = f"Please refer to the separate PDF file: {os.path.basename(instruction_template_path)}"
+            
+            # Add another paragraph mentioning the chef
+            chef_name = os.path.basename(instruction_template_path).split('_')[-1].split('.')[0]
+            p2 = text_frame.add_paragraph()
+            p2.text = f"Chef: {chef_name}"
+            
+        elif file_ext == '.pptx':
+            # For PPTX files, copy slides from the template
+            instruction_prs = Presentation(instruction_template_path)
+            for slide in instruction_prs.slides:
+                # Copy each slide from the instruction template
+                copy_slide(slide, prs)
+        else:
+            # For unsupported file types, create a generic slide
+            blank_slide = prs.slides.add_slide(prs.slide_layouts[5])  # Blank layout
+            if hasattr(blank_slide, 'shapes') and hasattr(blank_slide.shapes, 'title') and blank_slide.shapes.title:
+                blank_slide.shapes.title.text = "Cooking Instructions"
+            
+            left = Inches(1)
+            top = Inches(2)
+            width = Inches(8)
+            height = Inches(5)
+            textbox = blank_slide.shapes.add_textbox(left, top, width, height)
+            text_frame = textbox.text_frame
+            p = text_frame.add_paragraph()
+            p.text = "Standard cooking instructions go here. Please follow these guidelines for all meals."
+    else:
+        # Create a basic instruction slide if no template is available
+        blank_slide = prs.slides.add_slide(prs.slide_layouts[5])  # Blank layout
+        if hasattr(blank_slide, 'shapes') and hasattr(blank_slide.shapes, 'title') and blank_slide.shapes.title:
+            blank_slide.shapes.title.text = "Cooking Instructions"
+        
+        # Add basic instructions text box
+        left = Inches(1)
+        top = Inches(2)
+        width = Inches(8)
+        height = Inches(5)
+        textbox = blank_slide.shapes.add_textbox(left, top, width, height)
+        text_frame = textbox.text_frame
+        p = text_frame.add_paragraph()
+        p.text = "Standard cooking instructions go here. Please follow these guidelines for all meals."
+    
+    return prs
 
 def generate_ppt(df, prs, background_path):
+    df.sort_values(by=['HOUSEHOLD_MEMBERS', 'CLIENT_UNIQUE_ID'], inplace=True)
+    #df.to_excel("output.xlsx", index=False)
     # Get the first slide as a template
     template_slide = prs.slides[0]
     text_type = template_slide.shapes[1].shape_type  # Identify the text shape type from template
     
+    # Check if there's an instruction slide in the template
+    instruction_slide = None
+    if len(prs.slides) > 1:
+        instruction_slide = prs.slides[1]
+    
+    # Save the template slides before we start adding new ones
+    template_slides = []
+    for i in range(len(prs.slides)):
+        template_slides.append(prs.slides[i])
+    
+    current_household = None
+    
     # Iterate each row in df_merge
     for index, row in df.iterrows():
+        # If we're changing households and there's an instruction slide, add a copy of it
+        if current_household is not None and current_household != row['HOUSEHOLD_GROUP'] and instruction_slide is not None:
+            # Add the instruction slide between households
+            copy_slide_with_images(instruction_slide, prs)
+        
+        # Update current household
+        current_household = row['HOUSEHOLD_GROUP']
+        
         # Add one page copied from template
-        new_slide = copy_slide(template_slide, prs)
-        line_index = 0
+        new_slide = copy_slide_with_images(template_slide, prs)
 
-        # Change text from line1 to line6
+        # parse the text to the template slide
         for shape in new_slide.shapes:
             if shape.shape_type == text_type and shape.has_text_frame:
-                # Get the text frame
-                text_frame = shape.text_frame
+                key = shape.name 
+                if shape.has_text_frame:
+                    text_frame = shape.text_frame
+                    if text_frame.paragraphs and text_frame.paragraphs[0].runs:
+                        text_frame.paragraphs[0].runs[0].text = row[key]
 
-                for paragraph in text_frame.paragraphs:
-                    for run in paragraph.runs:
-                        run.text = row['line_' + str(line_index+1)]
-                        line_index += 1
-                    break
-
-        # Add background
+        # Add background if needed
         if background_path:
             new_slide = insert_background(new_slide, background_path)
+    
+    # Remove the template slides (first N slides)
+    for _ in range(len(template_slides)):
+        rId = prs.slides._sldIdLst[0].rId
+        prs.part.drop_rel(rId)
+        del prs.slides._sldIdLst[0]
     
     return prs
 
 def new_database_access():
     return AirTable()
 
-def generate_one_pagers(prs, background_path=None):
-    # Initialize Airtable connection
-    ac = new_database_access()
+def generate_one_pagers(prs, background_path=None, airtable_client=None):
+    # Initialize Airtable connection if not provided
+    ac = airtable_client or new_database_access()
     
     # Process data from Airtable
     processed_data = ac.process_data()
@@ -274,15 +542,88 @@ def generate_one_pagers(prs, background_path=None):
     
     return prs
 
-if __name__ == "__main__":
-    # Paths to template and background
-    template_path = 'template/one_pager_template.pptx'
-    #background_path = 'templates/background.jpg'
-    prs_file = Presentation(template_path)
-    # Generate one pagers
-    prs = generate_one_pagers(prs_file)
+# Streamlit interface
+def streamlit_app():
+    st.title("Meal Plan One-Pager Generator")
     
-    # Save the result
-    output_path = f'OnePager_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pptx'
-    prs.save(output_path)
-    print(f"One pagers generated and saved as {output_path}")
+    # File upload for template
+    template_file = st.file_uploader("Upload PowerPoint Template (include instruction slide as second slide)", type=["pptx"])
+    
+    # File upload for background
+    background_file = st.file_uploader("Upload Background Image (optional)", type=["jpg", "jpeg", "png"])
+    
+    # Generate button
+    if st.button("Generate One-Pagers") and template_file:
+        with st.spinner("Generating one-pagers..."):
+            # Save uploaded files temporarily
+            template_path = f"temp_template_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pptx"
+            with open(template_path, "wb") as f:
+                f.write(template_file.getbuffer())
+            
+            background_path = None
+            if background_file:
+                background_path = f"temp_background_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+                with open(background_path, "wb") as f:
+                    f.write(background_file.getbuffer())
+            
+            # Check if template has at least 2 slides
+            prs_file = Presentation(template_path)
+            if len(prs_file.slides) < 2:
+                st.warning("Your template should include an instruction slide as the second slide. Proceeding without instructions.")
+            
+            # Generate one pagers
+            prs = generate_one_pagers(prs_file, background_path)
+            
+            # Save the result
+            output_path = f'OnePager_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pptx'
+            prs.save(output_path)
+            
+            # Clean up temporary files
+            if os.path.exists(template_path):
+                os.remove(template_path)
+            if background_path and os.path.exists(background_path):
+                os.remove(background_path)
+            
+            # Provide download link
+            with open(output_path, "rb") as file:
+                st.download_button(
+                    label="Download One-Pagers",
+                    data=file,
+                    file_name=output_path,
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                )
+            
+            st.success(f"One-pagers generated successfully!")
+
+if __name__ == "__main__":
+    # Check if running in Streamlit
+    if 'STREAMLIT_RUN_MODE' in os.environ:
+        streamlit_app()
+    else:
+        # Command line execution
+        import argparse
+        
+        # Create argument parser
+        parser = argparse.ArgumentParser(description="Generate meal plan one-pagers")
+        parser.add_argument('--template', default='template/one_pager_template_v2.pptx', help='Path to PowerPoint template (include instruction slide as second slide)')
+        parser.add_argument('--background', help='Path to background image (optional)')
+        
+        args = parser.parse_args()
+        
+        # Initialize Airtable client
+        ac = new_database_access()
+        
+        # Load template
+        prs_file = Presentation(args.template)
+        
+        # Check if template has at least 2 slides
+        if len(prs_file.slides) < 2:
+            print("Warning: Your template should include an instruction slide as the second slide. Proceeding without instructions.")
+        
+        # Generate one pagers
+        prs = generate_one_pagers(prs_file, args.background, ac)
+        
+        # Save the result
+        output_path = f'OnePager_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pptx'
+        prs.save(output_path)
+        print(f"One pagers generated and saved as {output_path}")

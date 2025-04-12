@@ -231,23 +231,53 @@ def main():
     st.header(':green[One-Sheeter] Generator - Airtable 📑')
     st.markdown("⚠️ Source Table: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
-    new_one_pager_template = st.file_uploader(":blue[Optionally Upload a new One_Pager_Template.pptx]", type="pptx",key="new_one_pager_template")
-    if new_one_pager_template is not None:
-        prs_file = Presentation(new_one_pager_template)
-    else:
-        prs_file = Presentation('template/One_Pager_Template.pptx')
+
+    # File upload for template
+    new_one_pager_template = st.file_uploader(":blue[Upload PowerPoint Template]", 
+                                            type="pptx", 
+                                            key="new_one_pager_template",
+                                            help="Include instruction slide as second slide")
+
+    # Generate button
     one_sheeter_generate_button = st.button("Generate One-Sheeter")
+
     if one_sheeter_generate_button:
         with st.spinner('Generating One-Sheeter... It may take a few minutes 🕐'):
+            # Save uploaded files temporarily if needed
+            template_path = 'template/One_Pager_Template_v2.pptx'  # Default path
+            
+            if new_one_pager_template is not None:
+                template_path = f"temp_template_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pptx"
+                with open(template_path, "wb") as f:
+                    f.write(new_one_pager_template.getbuffer())
+            
+            # Load template
+            prs_file = Presentation(template_path)
+            
+            # Check if template has at least 2 slides (display warning if not)
+            if len(prs_file.slides) < 2:
+                st.warning("Your template should include an instruction slide as the second slide. Proceeding without instructions.")
+            
+            # Generate one pagers (no background parameter)
             prs = generate_one_pagers(prs_file)
+            
+            # Save the result
             updated_ppt_name = f'{current_date}__one_sheeter.pptx'
             prs.save(updated_ppt_name)
+            
+            # Clean up temporary files
+            if new_one_pager_template is not None and os.path.exists(template_path):
+                os.remove(template_path)
+            
+        # Provide download link
         with open(updated_ppt_name, "rb") as file:
             st.download_button(
                 label="Download One-Sheeter",
                 data=file,
                 file_name=updated_ppt_name,
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            ) 
+            )
+        
+        st.success("One-Sheeter generated successfully!")
 if __name__ == "__main__":
     main()
