@@ -239,8 +239,8 @@ def main():
     current_date = datetime.now().strftime("%Y%m%d")
 
     # Generate button
-    st.markdown("⚠️ Make sure you grouped orders by Dish and generate position id in Airtable before running this generator")
-    dish_sticker_generate_button = st.button("I have applied position Id and now lets generate Dish Stickers")
+    st.markdown("⚠️ Make sure you grouped orders by Dish ID and generate position id in Airtable, before running this generator")
+    dish_sticker_generate_button = st.button("I have applied position id, lets get Dish Stickers")
     
     if dish_sticker_generate_button:
         try:

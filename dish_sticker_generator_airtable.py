@@ -49,7 +49,8 @@ class AirTable():
                 'MEAL_TYPE': 'fld00H3SpKNqTbhC0',
                 'QUANTITY': 'fldfwdu2UKbcTve4a',
                 'POSITION_ID':'fldRWwXRTzUflOPgk',
-                'DISH_NAME':'fldmqHv4aXJxuJ8E2'
+                'DISH_NAME':'fldmqHv4aXJxuJ8E2',
+                'DISH_ID':'fldhrw7U0pV4D9Cad'
             }
         except Exception as e:
             raise AirTableError(f"Failed to initialize AirTable connection: {str(e)}")
@@ -185,20 +186,20 @@ def generate_ppt(df, prs, background_path):
             raise PPTGenerationError("No data available to generate stickers")
             
         # Verify required columns
-        required_columns = ['line_1', 'line_2', 'line_3', 'Dish', 'Position Id']
+        required_columns = ['line_1', 'line_2', 'line_3', 'Dish ID (from Linked OrderItem)', 'Position Id']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             # Handle case where some columns are missing but we can continue
             st.warning(f"Missing or no data in columns: {', '.join(missing_columns)}. Will ignore.")
             for col in missing_columns:
-                if col in ['Dish', 'Position Id']:
+                if col in ['Dish ID (from Linked OrderItem)', 'Position Id']:
                     df[col] = 'Unknown'  # Default values for sorting
                 else:
                     df[col] = 'Not available'  # Default values for text
         
         # Safely sort values
-        if 'Dish' in df.columns and 'Position Id' in df.columns:
-            df.sort_values(by=['Dish', 'Position Id'], ascending=[True, True], inplace=True)
+        if 'Dish ID (from Linked OrderItem)' in df.columns and 'Position Id' in df.columns:
+            df.sort_values(by=['Dish ID (from Linked OrderItem)', 'Position Id'], ascending=[True, True], inplace=True)
             
         # Get the first slide as a template
         if len(prs.slides) == 0:
@@ -234,13 +235,7 @@ def generate_ppt(df, prs, background_path):
                     st.warning(f"Background image not found: {background_path}")
                     
             processed_count += 1
-            
-        # Remove template slide after all copies have been made
-        if len(prs.slides) > 1:
-            rId = prs.slides._element.get_rel_id(prs.slides[0]._element)
-            prs.part.drop_rel(rId)
-            prs.slides._element.remove(prs.slides[0]._element)
-            
+        
         st.success(f"Successfully generated {processed_count} stickers")
         return prs
     except Exception as e:
