@@ -204,27 +204,85 @@ def main():
     # dish_sticker_generator
     st.divider()
     st.header(':orange[Dish Sticker] Generator - Airtable 🥡 🍱')
-    st.markdown("⚠️ Source Table: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
+    st.markdown("⚠️ Source Table: [Clientservings > Sorted](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viw5hROs9I9vV0YEq?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
-    new_dish_sticker_template = st.file_uploader(":blue[Optionally Upload a new Dish_Sticker_Template.pptx]", type="pptx",key="new_dish_sticker_template")
-    if new_dish_sticker_template is not None:
-        prs_file = Presentation(new_dish_sticker_template)
-    else:
-        prs_file = Presentation('template/Dish_Sticker_Template.pptx')
+
+    # Template file handling with error checking
+    try:
+        new_dish_sticker_template = st.file_uploader(":blue[Optionally Upload a new Dish_Sticker_Template.pptx]", type="pptx", key="new_dish_sticker_template")
+        
+        if new_dish_sticker_template is not None:
+            try:
+                prs_file = Presentation(new_dish_sticker_template)
+                st.success("Custom template loaded successfully!")
+            except Exception as e:
+                st.error(f"Error loading uploaded template: {str(e)}")
+                st.info("Please upload a valid PowerPoint template file")
+                st.stop()
+        else:
+            template_path = 'template/Dish_Sticker_Template.pptx'
+            try:
+                if not os.path.exists(template_path):
+                    st.error(f"Default template not found at {template_path}")
+                    st.info("Please upload a custom template to continue")
+                    st.stop()
+                prs_file = Presentation(template_path)
+            except Exception as e:
+                st.error(f"Error loading default template: {str(e)}")
+                st.info("Please check that the template file exists and is not corrupted")
+                st.stop()
+    except Exception as e:
+        st.error(f"File upload error: {str(e)}")
+        st.stop()
+
+    # Current date for filename
+    current_date = datetime.now().strftime("%Y%m%d")
+
+    # Generate button
+    st.markdown("⚠️ Make sure you grouped orders by Dish and generate position id in Airtable before running this generator")
+    dish_sticker_generate_button = st.button("I have applied position Id and now lets generate Dish Stickers")
     
-    dish_sticker_generate_button = st.button("Generate Dish Stickers")
     if dish_sticker_generate_button:
-        with st.spinner('Generating dish stickers... It may take a few minutes 🕐'):
-            prs = generate_dish_stickers(prs_file)
-            updated_ppt_name = f'{current_date}_dish_sticker.pptx'
-            prs.save(updated_ppt_name)
-        with open(updated_ppt_name, "rb") as file:
-            st.download_button(
-                label="Download Stickers",
-                data=file,
-                file_name=updated_ppt_name,
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            )   
+        try:
+            with st.spinner('Generating dish stickers... It may take a few minutes 🕐'):
+                # Check if the presentation has slides
+                if len(prs_file.slides) == 0:
+                    st.error("The template contains no slides. Please use a valid template.")
+                    st.stop()
+                
+                # Generate stickers with error handling
+                prs = generate_dish_stickers(prs_file)
+                
+                # Check if generation was successful
+                if prs is None:
+                    st.error("Failed to generate stickers. Please check the error messages above.")
+                    st.stop()
+                
+                # Save the file with error handling
+                updated_ppt_name = f'{current_date}_dish_sticker.pptx'
+                try:
+                    prs.save(updated_ppt_name)
+                    st.success(f"Successfully saved {updated_ppt_name}")
+                except Exception as e:
+                    st.error(f"Failed to save PowerPoint file: {str(e)}")
+                    st.info("Check if you have write permissions to the current directory")
+                    st.stop()
+            
+            # Provide download button with error handling
+            try:
+                with open(updated_ppt_name, "rb") as file:
+                    st.download_button(
+                        label="Download Stickers",
+                        data=file,
+                        file_name=updated_ppt_name,
+                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    )
+            except Exception as e:
+                st.error(f"Error preparing download: {str(e)}")
+                st.info(f"The file was saved as {updated_ppt_name} but cannot be downloaded directly. Please access it from your server.")
+        except Exception as e:
+            st.error(f"Unexpected error during sticker generation: {str(e)}")
+            st.exception(e)  
 
     # one_pager_generator
     st.divider()
