@@ -20,35 +20,38 @@ class AirTable():
         self.base_id = "appEe646yuQexwHJo"
         
         # Initialize tables for dish stickers
-        self.dish_orders_table = Table(self.api_key, self.base_id, 'tblxT3Pg9Qh0BVZhM')  # Replace with your actual table ID
+        self.dish_orders_table = Table(self.api_key, self.base_id, 'tblVwpvUmsTS2Se51')  # Replace with your actual table ID
         
         # Define field mappings for dish stickers
         self.fields = {
-            'CLIENT': 'fldWYJStYSpX72pG3',
-            'DISH_STICKER': 'fldYZYDRjScz6ig5a',
-            'DELIVERY_DAY': 'flddRJziNBdEtrpmG',
-            'MEAL_TYPE': 'fldCsBzoy9rxKlWmN',
-            'PROTEIN': 'fldL1BpT5B6dPdh32',
-            'QUANTITY': 'fldvkwFMlBOW5um2y',
+            'CLIENT': 'fldDs6QXE6uYKIlRk',
+            'DISH_STICKER': 'fldeUJtuijUAbklCQ',
+            'DELIVERY_DAY': 'fld6YLCoS7XCFK04G',
+            'MEAL_TYPE': 'fld00H3SpKNqTbhC0',
+            'QUANTITY': 'fldfwdu2UKbcTve4a',
+            'POSITION_ID':'fldRWwXRTzUflOPgk',
+            'DISH_NAME':'fldmqHv4aXJxuJ8E2'
         }
     
     def get_all_dish_orders(self): 
-        data = self.dish_orders_table.all(fields=self.fields.values(), view='viwrZHgdsYWnAMhtX')
+        data = self.dish_orders_table.all(fields=self.fields.values(), view='viw5hROs9I9vV0YEq')
         df = pd.DataFrame([record['fields'] for record in data])
         
         # Rename columns to match the expected format
         column_mapping = {v.replace('fld', ''): k for k, v in self.fields.items()}
         df.rename(columns=column_mapping, inplace=True)
-        
+
+        # Convert list values to strings
+        df = df.applymap(lambda x: x[0] if isinstance(x, list) and len(x) == 1 else ', '.join(map(str, x)) if isinstance(x, list) else x)
+
         return df
 
     def process_data(self, df):
-        print(df)
         # Clean column names
         df.columns = [col.strip() for col in df.columns]
         
         # Create required fields for dish stickers
-        df['line_1'] = df.apply(lambda row: f"Prepared for: {row['Customer Name']} - {row['Order Type']}", axis=1)
+        df['line_1'] = df.apply(lambda row: f"Prepared for: {row.get('Customer Name') or ''} - {row.get('Meal Portion (from Linked OrderItem)') or ''}", axis=1)
         
         # Add best before date (delivery date + 3 days)
         def add_days(date_str, days=3):
@@ -60,7 +63,7 @@ class AirTable():
         df['line_2'] = "Best before: " + df['Best Before']
         
         # Set dish name
-        df['line_3'] = df['Meal Sticker']
+        df['line_3'] = df['Meal Sticker (from Linked OrderItem)']
 
         # Convert lines to strings
         df['line_1'] = df['line_1'].astype(str)
@@ -94,9 +97,10 @@ def copy_slide(template, target_prs):
     return new_slide
 
 def generate_ppt(df, prs, background_path):
+    df.sort_values(by=['Dish', 'Position Id'], ascending=[True, True], inplace=True)
     # Get the first slide as a template
     template_slide = prs.slides[0]
-    
+    print('df',df)
     # iterate each row in df_dish
     for index, row in df.iterrows():
         # add one page copied from template
