@@ -360,6 +360,7 @@ class MealRecommendation:
                 "Updated Nutrition Info": str(nutritional_information),
                 "Review Needed": review_needed,
                 "Explanation": explanation,
+                "Modified Recipe Details": str({item['Ingredient ID']: item['Grams'] for item in dish})
             }
             return recommendation_summary
     def get_ingrdts_one_component(self, component, final_ingredients):
