@@ -44,24 +44,39 @@ def main():
     # clientservings csv download
     st.divider()
     st.header(':green[ClientServings Excel] Generator 📑')
-    st.markdown("⚠️ Source Table: [ClientServings](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viwfdnCtkFK4EGFM4?blocks=hide)")
+    st.markdown("⚠️ Source Table: [Clientservings > Sorted](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viw5hROs9I9vV0YEq?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
     clientservings_generate_button = st.button("Get ClientServings")
+
     if clientservings_generate_button:
-        with st.spinner('Generating clientservings... It may take a few minutes 🕐'):
-            updated_xlsx_name = f'{current_date}_clientservings.xlsx'
+        try:
+            with st.spinner('Generating clientservings... It may take a few minutes 🕐'):
+                updated_xlsx_name = f'{current_date}_clientservings.xlsx'
 
-            airTable = new_database_access() 
-            all_output = airTable.consolidated_all_dishes_output()
-            excel_data = airTable.generate_clientservings_excel(all_output)
+                airTable = new_database_access() 
+                all_output = airTable.consolidated_all_dishes_output()
+                excel_data = airTable.generate_clientservings_excel(all_output)
 
-        # Allow the user to download the file
-        st.download_button(
-            label="Download ClientServings Excel",
-            data=excel_data,
-            file_name=updated_xlsx_name,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+            # Allow the user to download the file
+            st.download_button(
+                label="Download ClientServings Excel",
+                data=excel_data,
+                file_name=updated_xlsx_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+            # Success message
+            st.success("Excel file generated successfully!")
+            
+        except AirTableError as e:
+            # Handle specific AirTable errors
+            st.error(f"Error generating ClientServings Excel: {str(e)}")
+            logging.error(f"AirTable error: {str(e)}")
+            
+        except Exception as e:
+            # Handle unexpected errors
+            st.error("An unexpected error occurred. Please check the data in source table and try again.")
+
     # shipping_sticker_generator_v1
     st.divider()
     st.header(':blue[Shipping Sticker] Generator - Google Sheets 🚚')
