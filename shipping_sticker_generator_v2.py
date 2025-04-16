@@ -100,8 +100,8 @@ class AirTable():
             
             # Check if required columns exist
             required_cols = ['Quantity', 'Order Type', 'Shipping Phone', 'Shipping Province',
-                            'Shipping Name', 'Shipping Address 1', 'Shipping Address 2',
-                            'Shipping City', 'Shipping Country', 'Shipping Postal Code']
+                            'Shipping Name', 'Shipping Address 1',
+                            'Shipping City', 'Shipping Postal Code']
             
             missing_cols = [col for col in required_cols if col not in df.columns]
             if missing_cols:
@@ -133,7 +133,6 @@ class AirTable():
                 'Shipping Address 2',
                 'Shipping City',
                 'Shipping Province',
-                'Shipping Country',
                 'Shipping Postal Code',
                 'Shipping Phone'
             ])['Quantity'].sum().reset_index()
@@ -260,85 +259,6 @@ def generate_shipping_stickers(template_ppt):
         logger.debug(f"Detailed error: {error_details}")
         raise ValueError(f"An unexpected error occurred: {str(e)}")
 
-# Function for Streamlit interface with error handling
-def streamlit_shipping_sticker_generator():
-    st.divider()
-    st.header(':orange[Shipping Sticker] Generator - Airtable 🥡 🍱')
-    st.markdown("⚠️ Source Table: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
-    st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
-    
-    current_date = datetime.now().strftime("%Y%m%d")
-    
-    # Template upload section
-    new_shipping_sticker_template = st.file_uploader(
-        ":blue[Optionally Upload a new Shipping_Sticker_Template.pptx]", 
-        type="pptx",
-        key="new_shipping_sticker_template"
-    )
-    
-    # Template validation and loading
-    try:
-        if new_shipping_sticker_template is not None:
-            try:
-                prs_file = Presentation(new_shipping_sticker_template)
-                if len(prs_file.slides) == 0:
-                    st.error("⚠️ The uploaded template has no slides. Please check your template file.")
-                    return
-            except Exception as e:
-                st.error(f"⚠️ Invalid template file: {str(e)}")
-                return
-        else:
-            try:
-                # Check if default template exists
-                if not os.path.exists('template/Shipping_Sticker_Template.pptx'):
-                    st.error("⚠️ Default template file not found. Please upload a template file.")
-                    return
-                prs_file = Presentation('template/Shipping_Sticker_Template.pptx')
-                if len(prs_file.slides) == 0:
-                    st.error("⚠️ The default template has no slides. Please check your template file.")
-                    return
-            except Exception as e:
-                st.error(f"⚠️ Error loading default template: {str(e)}")
-                return
-    except Exception as e:
-        st.error(f"⚠️ Error during template preparation: {str(e)}")
-        return
-        
-    # Generate button
-    shipping_sticker_generate_button = st.button("Generate Shipping Stickers")
-    
-    if shipping_sticker_generate_button:
-        try:
-            with st.spinner('Generating dish stickers... It may take a few minutes 🕐'):
-                prs = generate_shipping_stickers(prs_file)
-                if prs:
-                    updated_ppt_name = f'{current_date}_shipping_sticker.pptx'
-                    prs.save(updated_ppt_name)
-                    st.success(f"✅ Successfully generated stickers with {len(prs.slides)} slides!")
-                    
-                    # Provide download button
-                    with open(updated_ppt_name, "rb") as file:
-                        st.download_button(
-                            label="Download Stickers",
-                            data=file,
-                            file_name=updated_ppt_name,
-                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                        )
-                else:
-                    st.warning("⚠️ No stickers were generated. Please check the data in Airtable.")
-        except AirTableError as e:
-            st.error(f"⚠️ Airtable Connection Error: {str(e)}")
-            st.info("Please check your Airtable API key and connection settings.")
-        except PPTGenerationError as e:
-            st.error(f"⚠️ PowerPoint Generation Error: {str(e)}")
-            st.info("There was a problem creating the PowerPoint file. Please check your template.")
-        except ValueError as e:
-            st.warning(f"⚠️ {str(e)}")
-        except Exception as e:
-            st.error(f"⚠️ Unexpected Error: {str(e)}")
-            st.info("Please contact support with the error details and time of occurrence.")
-            logger.error(f"Unexpected error in Streamlit interface: {str(e)}")
-            logger.debug(traceback.format_exc())
 
 if __name__ == "__main__":
     try:

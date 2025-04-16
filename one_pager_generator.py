@@ -86,7 +86,7 @@ class AirTable():
         # Process client servings data - keep only necessary columns
         df_orders = df_orders[['Delivery Date', 'Meal Sticker', 'Order Type', 'To_Match_Client_Nutrition',
                             'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
-                            'Shipping Province', 'Shipping Postal Code', 'Shipping Country','Customer Name']].dropna(subset=['To_Match_Client_Nutrition'])
+                            'Shipping Province', 'Shipping Postal Code', 'Customer Name']].dropna(subset=['To_Match_Client_Nutrition'])
         
         # Convert any list values to strings in all relevant columns
         # For client identifier
@@ -199,7 +199,6 @@ class AirTable():
             'Shipping City': 'first',
             'Shipping Province': 'first',
             'Shipping Postal Code': 'first',
-            'Shipping Country': 'first',
             'NUTRITION': 'first',
             # Combine these for each page
             'portion_str': lambda x: '\n\n'.join(x),
