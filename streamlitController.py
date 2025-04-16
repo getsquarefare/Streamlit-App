@@ -139,7 +139,7 @@ def main():
     # shipping_sticker_generator_v2
     st.divider()
     st.header(':blue[Shipping Sticker] Generator - Airtable 🚚')
-    st.markdown("⚠️ Source Table: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
+    st.markdown("⚠️ Source Table: [Open Orders > For Shipping Stickers](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwDpTtU0qaT9NcvG?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
     # Template uploader with error handling
@@ -219,7 +219,7 @@ def main():
     # dish_sticker_generator
     st.divider()
     st.header(':orange[Dish Sticker] Generator - Airtable 🥡 🍱')
-    st.markdown("⚠️ Source Table: [Clientservings > Sorted](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viw5hROs9I9vV0YEq?blocks=hide)")
+    st.markdown("⚠️ Source Table: [Clientservings > For Dish Stickers](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwxYRtkq19KcXcZX?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
     # Template file handling with error checking
@@ -302,7 +302,7 @@ def main():
     # one_pager_generator
     st.divider()
     st.header(':green[One-Sheeter] Generator - Airtable 📑')
-    st.markdown("⚠️ Source Table: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
+    st.markdown("⚠️ Source Table: [Open Orders > For One-Sheeter](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwuVy9aN2LLZrcPF?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
     # File upload for template

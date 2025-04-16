@@ -57,7 +57,7 @@ class AirTable():
     
     def get_all_dish_orders(self): 
         try:
-            data = self.dish_orders_table.all(fields=self.fields.values(), view='viw5hROs9I9vV0YEq')
+            data = self.dish_orders_table.all(fields=self.fields.values(), view='viwxYRtkq19KcXcZX')
             
             if not data:
                 raise AirTableError("No data retrieved from Airtable. Please check if the view has records.")

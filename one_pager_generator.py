@@ -56,7 +56,7 @@ class AirTable():
         }
     
     def get_open_orders(self):
-        data = self.open_orders_table.all(fields=self.open_orders_fields.values(), view='viwrZHgdsYWnAMhtX')  # Replace with actual view ID
+        data = self.open_orders_table.all(fields=self.open_orders_fields.values(), view='viwuVy9aN2LLZrcPF')  # Replace with actual view ID
         
         # Create DataFrame and map column names
         df = pd.DataFrame([record['fields'] for record in data])

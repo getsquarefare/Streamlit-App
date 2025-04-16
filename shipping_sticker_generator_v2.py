@@ -61,7 +61,7 @@ class AirTable():
     def get_all_open_orders(self): 
         try:
             logger.info("Fetching open orders from Airtable")
-            data = self.open_orders_table.all(fields=self.fields.values(), view='viwrZHgdsYWnAMhtX')
+            data = self.open_orders_table.all(fields=self.fields.values(), view='viwDpTtU0qaT9NcvG')
             
             if not data:
                 logger.warning("No open orders found in Airtable")
