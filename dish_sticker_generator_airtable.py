@@ -39,18 +39,18 @@ class AirTable():
             self.base_id = "appEe646yuQexwHJo"
             
             # Initialize tables for dish stickers
-            self.dish_orders_table = Table(self.api_key, self.base_id, 'tblVwpvUmsTS2Se51')
+            self.dish_orders_table = Table(self.api_key, self.base_id, 'tblxT3Pg9Qh0BVZhM')
             
             # Define field mappings for dish stickers
             self.fields = {
-                'CLIENT': 'fldDs6QXE6uYKIlRk',
-                'DISH_STICKER': 'fldeUJtuijUAbklCQ',
-                'DELIVERY_DAY': 'fld6YLCoS7XCFK04G',
-                'MEAL_TYPE': 'fld00H3SpKNqTbhC0',
-                'QUANTITY': 'fldfwdu2UKbcTve4a',
-                'POSITION_ID':'fldRWwXRTzUflOPgk',
-                'DISH_NAME':'fldmqHv4aXJxuJ8E2',
-                'DISH_ID':'fldhrw7U0pV4D9Cad'
+                'CLIENT': 'fldWYJStYSpX72pG3',
+                'DISH_STICKER': 'fldYZYDRjScz6ig5a',
+                'DELIVERY_DAY': 'flddRJziNBdEtrpmG',
+                'MEAL_TYPE': 'fldCsBzoy9rxKlWmN',
+                'QUANTITY': 'fldvkwFMlBOW5um2y',
+                'POSITION_ID':'fldu8pc7PsGFMRRqv',
+                'DISH_NAME':'fldegrwFVynxhDavT',
+                'DISH_ID':'fldLOvWuvg6X9Odvw'
             }
         except Exception as e:
             raise AirTableError(f"Failed to initialize AirTable connection: {str(e)}")
@@ -75,7 +75,7 @@ class AirTable():
             df = df.applymap(lambda x: x[0] if isinstance(x, list) and len(x) == 1 else ', '.join(map(str, x)) if isinstance(x, list) else x)
 
             # Verify required columns
-            required_columns = ['Customer Name', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Meal Sticker (from Linked OrderItem)', 'Quantity']
+            required_columns = ['Customer Name', 'Order Type', 'Delivery Date', 'Meal Sticker', 'Quantity']
             missing_columns = [col for col in required_columns if col not in df.columns]
             
             if missing_columns:
@@ -105,7 +105,7 @@ class AirTable():
                 raise DataProcessingError(f"Found {missing_delivery_dates} records with missing delivery dates")
                 
             # Create required fields for dish stickers
-            df['line_1'] = df.apply(lambda row: f"Prepared for: {row.get('Customer Name') or 'N/A'} - {row.get('Meal Portion (from Linked OrderItem)') or 'N/A'}", axis=1)
+            df['line_1'] = df.apply(lambda row: f"Prepared for: {row.get('Customer Name') or 'N/A'} - {row.get('Order Type') or 'N/A'}", axis=1)
             
             # Add best before date (delivery date + 3 days)
             def add_days(date_str, days=3):
@@ -124,7 +124,7 @@ class AirTable():
             
             # Set dish name
             df['line_3'] = df.apply(
-                lambda row: row.get('Meal Sticker (from Linked OrderItem)') or "Dish name not available", 
+                lambda row: row.get('Meal Sticker') or "Dish name not available", 
                 axis=1
             )
 
@@ -186,20 +186,20 @@ def generate_ppt(df, prs, background_path):
             raise PPTGenerationError("No data available to generate stickers")
             
         # Verify required columns
-        required_columns = ['line_1', 'line_2', 'line_3', 'Dish ID (from Linked OrderItem)', 'Position Id']
+        required_columns = ['line_1', 'line_2', 'line_3', 'Dish ID', 'Position Id (from ClientServings)']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             # Handle case where some columns are missing but we can continue
             st.warning(f"Missing or no data in columns: {', '.join(missing_columns)}. Will ignore.")
             for col in missing_columns:
-                if col in ['Dish ID (from Linked OrderItem)', 'Position Id']:
+                if col in ['Dish ID', 'Position Id']:
                     df[col] = 'Unknown'  # Default values for sorting
                 else:
                     df[col] = 'Not available'  # Default values for text
         
         # Safely sort values
-        if 'Dish ID (from Linked OrderItem)' in df.columns and 'Position Id' in df.columns:
-            df.sort_values(by=['Dish ID (from Linked OrderItem)', 'Position Id'], ascending=[True, True], inplace=True)
+        if 'Dish ID' in df.columns and 'Position Id' in df.columns:
+            df.sort_values(by=['Dish ID', 'Position Id'], ascending=[True, True], inplace=True)
             
         # Get the first slide as a template
         if len(prs.slides) == 0:
@@ -275,112 +275,3 @@ def generate_dish_stickers(prs, background_path=None):
         st.info("Error details:")
         st.code(traceback.format_exc())
         return None
-
-# Streamlit UI component
-def dish_sticker_generator_ui():
-    st.divider()
-    st.header(':orange[Dish Sticker] Generator - Airtable 🥡 🍱')
-    
-    # Source information
-    st.markdown("⚠️ Source Table: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
-    st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
-    
-    # Template uploader with error handling
-    new_dish_sticker_template = st.file_uploader(":blue[Optionally Upload a new Dish_Sticker_Template.pptx]", type="pptx", key="new_dish_sticker_template")
-    
-    try:
-        if new_dish_sticker_template is not None:
-            prs_file = Presentation(new_dish_sticker_template)
-            st.success("Template uploaded successfully!")
-        else:
-            template_path = 'template/Dish_Sticker_Template.pptx'
-            if not os.path.exists(template_path):
-                st.error(f"Default template not found: {template_path}")
-                st.info("Please upload a template file to continue")
-                return
-            prs_file = Presentation(template_path)
-            st.info(f"Using default template: {template_path}")
-    except PackageNotFoundError:
-        st.error("The uploaded file is not a valid PowerPoint file or is corrupted")
-        st.info("Please upload a valid PowerPoint template file")
-        return
-    except Exception as e:
-        st.error(f"Error loading template: {str(e)}")
-        st.info("Please try with a different template file")
-        return
-    
-    # Background image option
-    background_path = None
-    use_background = st.checkbox("Use background image", value=False)
-    if use_background:
-        background_file = st.file_uploader("Upload background image (JPG, PNG)", type=["jpg", "jpeg", "png"])
-        if background_file is not None:
-            # Save uploaded background to temp file
-            temp_bg_path = f"temp_bg_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{background_file.name.split('.')[-1]}"
-            with open(temp_bg_path, "wb") as f:
-                f.write(background_file.getbuffer())
-            background_path = temp_bg_path
-            st.success(f"Background image uploaded: {background_file.name}")
-    
-    # Current date for the file name
-    current_date = datetime.now().strftime("%Y%m%d")
-    
-    # Generate button with error handling  
-    dish_sticker_generate_button = st.button("Generate Dish Stickers")
-    
-    if dish_sticker_generate_button:
-        try:
-            with st.spinner('Generating dish stickers... It may take a few minutes 🕐'):
-                # Check template has at least one slide
-                if len(prs_file.slides) == 0:
-                    st.error("The template doesn't contain any slides")
-                    return
-                
-                # Generate stickers
-                prs = generate_dish_stickers(prs_file, background_path)
-                
-                # Check if generation was successful
-                if prs is None:
-                    st.error("Failed to generate stickers")
-                    return
-                    
-                # Save the file
-                updated_ppt_name = f'{current_date}_dish_sticker.pptx'
-                try:
-                    prs.save(updated_ppt_name)
-                    st.success(f"PowerPoint file saved as {updated_ppt_name}")
-                except Exception as e:
-                    st.error(f"Failed to save PowerPoint file: {str(e)}")
-                    return
-                
-            # Provide download button
-            try:
-                with open(updated_ppt_name, "rb") as file:
-                    st.download_button(
-                        label="Download Stickers",
-                        data=file,
-                        file_name=updated_ppt_name,
-                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                    )
-            except Exception as e:
-                st.error(f"Failed to prepare download: {str(e)}")
-        except Exception as e:
-            st.error(f"Unexpected error during generation: {str(e)}")
-            st.info("Error details:")
-            st.code(traceback.format_exc())
-        finally:
-            # Clean up temporary files
-            if use_background and background_path and os.path.exists(background_path) and background_path.startswith("temp_bg_"):
-                try:
-                    os.remove(background_path)
-                except:
-                    pass
-
-if __name__ == "__main__":
-    try:
-        st.set_page_config(page_title="Dish Sticker Generator", layout="wide")
-        st.title("Dish Sticker Generator")
-        dish_sticker_generator_ui()
-    except Exception as e:
-        st.error(f"Application Error: {str(e)}")
-        st.code(traceback.format_exc())

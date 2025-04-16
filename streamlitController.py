@@ -219,7 +219,7 @@ def main():
     # dish_sticker_generator
     st.divider()
     st.header(':orange[Dish Sticker] Generator - Airtable 🥡 🍱')
-    st.markdown("⚠️ Source Table: [Clientservings > For Dish Stickers](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwxYRtkq19KcXcZX?blocks=hide)")
+    st.markdown("⚠️ Source Table: [Open Orders > For Dish Stickers](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwxYRtkq19KcXcZX?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
     # Template file handling with error checking
