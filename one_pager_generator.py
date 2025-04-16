@@ -38,7 +38,8 @@ class AirTable():
             'SHIPPING_PROVINCE': 'fldGeLuYoGKiw227Y',
             'SHIPPING_COUNTRY': 'fldnP3H74kAXKaIhN',
             'SHIPPING_POSTAL_CODE': 'fldwqwf7WSbiP0hJg',
-            'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W'      
+            'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W',
+            'CUSTOMER_NAME': 'fldWYJStYSpX72pG3',   
         }
         
         # Define field mappings for clients info
@@ -65,12 +66,12 @@ class AirTable():
         return df
     
     def get_clients_info(self):
-        data = self.clients_table.all(fields=self.clients_fields.values())  # Replace with actual view ID
-        print('Data from clients table:', data)
+        data = self.clients_table.all(fields=self.clients_fields.values())  # Replace with actual view ID 
         # Create DataFrame and map column names
         df = pd.DataFrame([{**record['fields'], 'id': record['id']} for record in data])
         column_mapping = {v.replace('fld', ''): k for k, v in self.clients_fields.items()}
         df.rename(columns=column_mapping, inplace=True)
+        # print('Data from clients table:', df)
         return df
     
     def process_data(self):
@@ -82,16 +83,16 @@ class AirTable():
         df_orders.columns = [col.strip() for col in df_orders.columns]
         df_clients.columns = [col.strip() for col in df_clients.columns]
         
-        # Process client servings data
+        # Process client servings data - keep only necessary columns
         df_orders = df_orders[['Delivery Date', 'Meal Sticker', 'Order Type', 'To_Match_Client_Nutrition',
-                              'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
-                              'Shipping Province', 'Shipping Postal Code', 'Shipping Country']].dropna(subset=['To_Match_Client_Nutrition'])
+                            'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
+                            'Shipping Province', 'Shipping Postal Code', 'Shipping Country','Customer Name']].dropna(subset=['To_Match_Client_Nutrition'])
         
         # Convert any list values to strings in all relevant columns
         # For client identifier
         df_orders["To_Match_Client_Nutrition"] = df_orders["To_Match_Client_Nutrition"].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) > 0 else 
-                     (str(x) if not isinstance(x, list) else "Unknown")
+                    (str(x) if not isinstance(x, list) else "Unknown")
         )
         
         # For meal sticker
@@ -105,57 +106,35 @@ class AirTable():
         # For order type
         df_orders["Order Type"] = df_orders["Order Type"].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) > 0 else 
-                     (str(x) if not isinstance(x, list) else "Unknown")
+                    (str(x) if not isinstance(x, list) else "Unknown")
         )
         
-        # Group the DataFrame by client identifier column and create page indices
-        page_size = 6
-        grouped_df = df_orders.groupby("To_Match_Client_Nutrition")
-        df_orders["Index"] = grouped_df.cumcount()
-        df_orders['page_number'] = df_orders['Index'] // page_size
-        
-        # Create grouped dataframe with clients and pages
-        df_orders_grouped = pd.DataFrame(df_orders.groupby(['To_Match_Client_Nutrition', 'page_number']).agg({
-            'To_Match_Client_Nutrition': 'first', 
-            'page_number': 'first', 
-            'Delivery Date': 'first',
-            'Order Type': 'first',
-            'Shipping Address 1': 'first',
-            'Shipping Address 2': 'first',
-            'Shipping City': 'first',
-            'Shipping Province': 'first',
-            'Shipping Postal Code': 'first',
-            'Shipping Country': 'first'
-        })).reset_index(drop=True)
+        # Determine portions based on order type
+        df_orders['Portions'] = df_orders.apply(
+            lambda row: 0.5 if row['Order Type'] == 'Breakfast' 
+                    else (0.25 if row['Order Type'] == 'Snack' else 1),
+            axis=1
+        )
         
         # Calculate portion strings with appropriate line breaks
         standard_str = "Fish Taco Bowl with Grilled Chicken, Shredded Red and Green Cabbage, Roasted"
         unit_len = len(standard_str)
         
-        # Determine portions based on order type
-        df_orders['Portions'] = df_orders.apply(
-            lambda row: 0.5 if row['Order Type'] == 'Breakfast' 
-                       else (0.25 if row['Order Type'] == 'Snack' else 1),
-            axis=1
-        )
-        
         df_orders['portion_str'] = df_orders.apply(
-            lambda row: '[ ' + str(int(row['Portions'])) + ' ] ' + 
+            lambda row: '[ 1 ] ' + 
             '\n' * (math.ceil(len(row['Meal Sticker'])/unit_len) - 1), 
             axis=1
         )
         
-        # Group portions and dish names by client and page
-        df_orders_grouped['portion_list'] = df_orders.groupby(['To_Match_Client_Nutrition', 'page_number'])['portion_str'].apply(
-            lambda x: '\n\n'.join([str(item) for item in x])
-        ).reset_index(drop=True)
+        # Rename client column for consistent merging
+        df_orders.rename(columns={'To_Match_Client_Nutrition': 'CLIENT'}, inplace=True)
+        df_clients.rename(columns={'id': 'CLIENT'}, inplace=True)
         
-        df_orders_grouped['dish_list'] = df_orders.groupby(['To_Match_Client_Nutrition', 'page_number'])['Meal Sticker'].apply(
-            lambda x: '\n\n'.join([str(item) for item in x])
-        ).reset_index(drop=True)
+        # Ensure client names are cleaned
+        df_orders.CLIENT = df_orders.CLIENT.apply(lambda x: str(x).strip() if isinstance(x, str) else x)
+        df_clients.CLIENT = df_clients.CLIENT.apply(lambda x: str(x).strip() if isinstance(x, str) else x)
         
-        meal_order = ['breakfast', 'lunch', 'dinner', 'snack']
-        # Format nutrition information from individual components
+        # Process nutrition information
         for _, row in df_clients.iterrows():
             if 'Customization Tags' in row and isinstance(row['Customization Tags'], list) and "No Nutrition Data in Sheet" in row['Customization Tags']:
                 nutrition_line = ''
@@ -173,19 +152,17 @@ class AirTable():
             
             df_clients.loc[_, 'NUTRITION'] = nutrition_line
         
-        # Now group the nutrition info
-        df_clients['NUTRITION'] = df_clients.groupby('id')['NUTRITION'].apply(
+        # Group the nutrition info
+        df_clients['NUTRITION'] = df_clients.groupby('CLIENT')['NUTRITION'].apply(
             lambda x: '\n'.join(filter(None, x))
         ).reset_index(drop=True)
-
-        df_clients['consolidated_nutrition'] = ""
-
+        
         # Extract the relevant parts of the ID for grouping
         df_clients['group_key'] = df_clients['identifier'].apply(lambda x: "".join(x.split("|")[::2]) if isinstance(x, str) else x)
-
-        # Consolidate nutrition lines for rows with the same group_key
+        
+        # Sort and consolidate nutrition lines
         meal_order = ['breakfast', 'lunch', 'dinner', 'snack']
-
+        
         def sort_nutrition_lines(lines):
             def meal_sort_key(line):
                 for i, meal in enumerate(meal_order):
@@ -194,142 +171,143 @@ class AirTable():
                 return len(meal_order)  # if not found, put it at the end
             sorted_lines = sorted(filter(None, lines), key=meal_sort_key)
             return '\n'.join(sorted_lines)
-
+        
         consolidated_nutrition_map = df_clients.groupby('group_key')['NUTRITION'].apply(
             sort_nutrition_lines
         ).to_dict()
-
+        
         # Map the consolidated nutrition back to each row
         df_clients['consolidated_nutrition'] = df_clients['group_key'].map(consolidated_nutrition_map)
+        df_clients['NUTRITION'] = df_clients['consolidated_nutrition'].fillna('')
+        
+        # IMPROVEMENT: First merge the dataframes, then calculate page indices
+        df_merge = df_orders.merge(df_clients, on='CLIENT', how='left')
+        # print('df_merge.columns:', df_merge.columns)
+        # Now calculate page indices after merging
+        page_size = 6
+        df_merge['Index'] = df_merge.groupby(['Customer Name','Shipping Address 1']).cumcount()
+        df_merge['page_number'] = df_merge['Index'] // page_size
 
-        # Drop the temporary group_key column
-        # df_clients.drop(columns=['group_key'], inplace=True)
-        
-        # Rename client column in grouped dataframes for merging
-        df_orders_grouped.rename(columns={'To_Match_Client_Nutrition': 'CLIENT'}, inplace=True)
-        df_clients.rename(columns={'id': 'CLIENT'}, inplace=True)
-        
-        # Ensure client names are cleaned
-        df_orders_grouped.CLIENT = df_orders_grouped.CLIENT.apply(lambda x: str(x).strip() if isinstance(x, str) else x)
-        df_clients.CLIENT = df_clients.CLIENT.apply(lambda x: str(x).strip() if isinstance(x, str) else x)
-        df_clients.NUTRITION=df_clients['consolidated_nutrition'].fillna('')
-        # Merge the two dataframes
-        df_merge = df_orders_grouped.merge(df_clients, on='CLIENT', how='left').sort_values(by=['First_Name', 'Last_Name'])
-       
+        # Simple groupby to create page-level information
+        df_grouped = df_merge.groupby(['Customer Name', 'page_number']).agg({
+            # Keep the first occurrence of these customer details per page
+            'First_Name': 'first',
+            'Last_Name': 'first', 
+            'Delivery Date': 'first',
+            'Shipping Address 1': 'first',
+            'Shipping Address 2': 'first',
+            'Shipping City': 'first',
+            'Shipping Province': 'first',
+            'Shipping Postal Code': 'first',
+            'Shipping Country': 'first',
+            'NUTRITION': 'first',
+            # Combine these for each page
+            'portion_str': lambda x: '\n\n'.join(x),
+            'Meal Sticker': lambda x: '\n\n'.join(x)
+        }).reset_index()
+
+        # Rename the aggregated columns to match expected names
+        df_grouped.rename(columns={
+            'portion_str': 'portion_list',
+            'Meal Sticker': 'dish_list'
+        }, inplace=True)
+
         # Create a unique client identifier
-        df_merge['CLIENT_UNIQUE_ID'] = df_merge['First_Name'].fillna('') + ' ' + df_merge['Last_Name'].fillna('')
-        df_merge['CLIENT_UNIQUE_ID'] = df_merge['CLIENT_UNIQUE_ID'].apply(lambda x: x.strip())
-        df_merge = df_merge.sort_values(by=['CLIENT_UNIQUE_ID'])
+        df_grouped['CLIENT_UNIQUE_ID'] = df_grouped['First_Name'].fillna('') + ' ' + df_grouped['Last_Name'].fillna('')
+        df_grouped['CLIENT_UNIQUE_ID'] = df_grouped['CLIENT_UNIQUE_ID'].apply(lambda x: x.strip())
+        df_merge_grouped = df_grouped.sort_values(by=['CLIENT_UNIQUE_ID'])
         
         # Create a concatenated shipping address for household grouping
-        # Normalize address components by converting to lowercase and stripping whitespace
         address_components = ['Shipping Address 1', 'Shipping Address 2', 'Shipping Postal Code']
-        
-        # Check if we have the shipping address fields
-        has_address_fields = any(field in df_merge.columns for field in address_components)
+        has_address_fields = any(field in df_merge_grouped.columns for field in address_components)
         
         if has_address_fields:
             # Normalize and combine address components
             for field in address_components:
-                if field in df_merge.columns:
-                    df_merge[field] = df_merge[field].fillna('').astype(str).str.lower().str.strip()
+                if field in df_merge_grouped.columns:
+                    df_merge_grouped[field] = df_merge_grouped[field].fillna('').astype(str).str.lower().str.strip()
             
-            # Create a combined address string for grouping - ignoring recipient name
-            df_merge['COMPLETE_ADDRESS'] = ''
+            # Create a combined address string for grouping
+            df_merge_grouped['COMPLETE_ADDRESS'] = ''
             for field in address_components:
-                if field in df_merge.columns:
-                    df_merge['COMPLETE_ADDRESS'] += df_merge[field] + '|'
+                if field in df_merge_grouped.columns:
+                    df_merge_grouped['COMPLETE_ADDRESS'] += df_merge_grouped[field] + '|'
             
             # Group orders by client and get the first address for each client
-            # This creates a mapping of clients to their addresses
-            client_addresses = df_merge.groupby('CLIENT').agg({
+            client_addresses = df_merge_grouped.groupby('CLIENT_UNIQUE_ID').agg({
                 'COMPLETE_ADDRESS': 'first'
             }).reset_index()
             
             # Create a dictionary to map clients to their addresses
-            address_map = dict(zip(client_addresses['CLIENT'], client_addresses['COMPLETE_ADDRESS']))
+            address_map = dict(zip(client_addresses['CLIENT_UNIQUE_ID'], client_addresses['COMPLETE_ADDRESS']))
             
-            # Apply this mapping to get consistent addresses for all orders from the same client
-            df_merge['HOUSEHOLD_GROUP'] = df_merge['CLIENT'].map(address_map)
-            
-            # If mapping failed for any reason, use the client as fallback
-            df_merge['HOUSEHOLD_GROUP'] = df_merge['HOUSEHOLD_GROUP'].fillna(df_merge['CLIENT'])
+            # Apply this mapping to get consistent addresses
+            df_merge_grouped['HOUSEHOLD_GROUP'] = df_merge_grouped['CLIENT_UNIQUE_ID'].map(address_map)
+            df_merge_grouped['HOUSEHOLD_GROUP'] = df_merge_grouped['HOUSEHOLD_GROUP'].fillna(df_merge_grouped['CLIENT_UNIQUE_ID'])
             
             print("Grouping households by shipping address")
         else:
             # Fallback to using last name as proxy for household
-            df_merge['HOUSEHOLD_GROUP'] = df_merge['Last_Name'].fillna('Unknown')
+            df_merge_grouped['HOUSEHOLD_GROUP'] = df_merge_grouped['Last_Name'].fillna('Unknown')
             print("Shipping address fields not available, grouping households by last name instead")
-            
-        # Add household member info - will be used for the first sheet of each household
+        
+        # Add household member info
         household_members = {}
-        for household_id in df_merge['HOUSEHOLD_GROUP'].unique():
-            # Get unique clients in this household by their full names
-            members = df_merge[df_merge['HOUSEHOLD_GROUP'] == household_id][['CLIENT_UNIQUE_ID']].drop_duplicates()
+        for household_id in df_merge_grouped['HOUSEHOLD_GROUP'].unique():
+            members = df_merge_grouped[df_merge_grouped['HOUSEHOLD_GROUP'] == household_id][['CLIENT_UNIQUE_ID']].drop_duplicates()
             member_list = [name for name in members['CLIENT_UNIQUE_ID'] if name.strip()]
             household_members[household_id] = member_list
         
         # Add this info to the dataframe
-        df_merge['HOUSEHOLD_MEMBERS'] = df_merge['HOUSEHOLD_GROUP'].map(
+        df_merge_grouped['HOUSEHOLD_MEMBERS'] = df_merge_grouped['HOUSEHOLD_GROUP'].map(
             lambda x: "\n".join(household_members[x])
         )
         
-        # Mark first client in each household
-        """ df_merge['FIRST_IN_HOUSEHOLD'] = False
-        for household in df_merge['HOUSEHOLD_GROUP'].unique():
-            household_indices = df_merge[df_merge['HOUSEHOLD_GROUP'] == household].index
-            if len(household_indices) > 0:
-                df_merge.loc[household_indices[0], 'FIRST_IN_HOUSEHOLD'] = True """
+        # Generate household labels
+        df_merge_grouped['line_household_label'] = df_merge_grouped.apply(
+            lambda row: ("Household Members:" if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1 else ""),
+            axis=1
+        )
         
-        df_merge['line_household_label'] = df_merge.apply(
-            lambda row:
-                       ("Household Members:" if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1 else ""),
-            axis=1
-        )
         # Generate final text fields
-        df_merge['line_household'] = df_merge.apply(
-            lambda row:
-                       (row['HOUSEHOLD_MEMBERS'] if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1 else ""),
+        df_merge_grouped['line_household'] = df_merge_grouped.apply(
+            lambda row: (row['HOUSEHOLD_MEMBERS'] if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1 else ""),
             axis=1
         )
-
-        df_merge['line_preparedFor'] = df_merge.apply(
-            lambda row:"Prepared for: " + (row['First_Name'] or '') + " " + (row['Last_Name'] or ''),axis=1
+        
+        df_merge_grouped['line_preparedFor'] = df_merge_grouped.apply(
+            lambda row: "Prepared for: " + (row['First_Name'] or '') + " " + (row['Last_Name'] or ''), axis=1
         )
         
         # Add best before date (delivery date + 3 days)
         def add_days(date_str, days=3):
-            # Handle different date formats
             try:
-                # Try to parse as mm/dd/yyyy
                 date = datetime.strptime(date_str, "%Y-%m-%d")
             except ValueError:
                 try:
-                    # Try ISO format
                     date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
                 except ValueError:
-                    # If all else fails, use today's date
                     date = datetime.now()
             
             end_date = date + timedelta(days=days)
             return end_date.strftime('%m/%d/%Y')
         
-        df_merge['line_bestBefore'] = "Best before: " + df_merge['Delivery Date'].apply(lambda x: add_days(x, 3))
-        df_merge['line_deliveryDate'] = df_merge['Delivery Date'] + " Delivery"
-        df_merge['line_nutrition'] = df_merge.NUTRITION
-        df_merge['line_portion'] = df_merge.portion_list
-        df_merge['line_dishes'] = df_merge.dish_list
+        df_merge_grouped['line_bestBefore'] = "Best before: " + df_merge_grouped['Delivery Date'].apply(lambda x: add_days(x, 3))
+        df_merge_grouped['line_deliveryDate'] = df_merge_grouped['Delivery Date'] + " Delivery"
+        df_merge_grouped['line_nutrition'] = df_merge_grouped.NUTRITION
+        df_merge_grouped['line_portion'] = df_merge_grouped.portion_list
+        df_merge_grouped['line_dishes'] = df_merge_grouped.dish_list
         
         # Sort by household group to ensure all members of the same household are together
-        df_merge = df_merge.sort_values(by=['HOUSEHOLD_GROUP', 'First_Name', 'Last_Name', 'page_number'])
+        df_merge_grouped = df_merge_grouped.sort_values(by=['HOUSEHOLD_GROUP', 'First_Name', 'Last_Name', 'page_number'])
         
         # Debug log to show household groupings
-        print(f"Total households: {len(df_merge['HOUSEHOLD_GROUP'].unique())}")
-        for household in df_merge['HOUSEHOLD_GROUP'].unique():
-            members = df_merge[df_merge['HOUSEHOLD_GROUP'] == household]['CLIENT_UNIQUE_ID'].unique()
+        print(f"Total households: {len(df_merge_grouped['HOUSEHOLD_GROUP'].unique())}")
+        for household in df_merge_grouped['HOUSEHOLD_GROUP'].unique():
+            members = df_merge_grouped[df_merge_grouped['HOUSEHOLD_GROUP'] == household]['CLIENT_UNIQUE_ID'].unique()
             print(f"Household '{household}': {', '.join(members)}")
         
-        return df_merge
+        return df_merge_grouped
 
 def insert_background(slide, img_path):
     left = top = Inches(0)
@@ -536,7 +514,7 @@ def generate_one_pagers(prs, background_path=None, airtable_client=None):
     
     # Process data from Airtable
     processed_data = ac.process_data()
-    
+    # processed_data.to_excel("output.xlsx", index=False)
     # Generate PowerPoint
     prs = generate_ppt(processed_data, prs, background_path)
     
