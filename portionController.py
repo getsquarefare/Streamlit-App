@@ -432,7 +432,7 @@ class MealRecommendation:
         open_orders = self.db.get_all_open_orders()
         client_dish_pairs = self.build_client_dish_mapping(
             open_orders,
-            shopify_id_column="SquareSpace/ Internal OrderItem ID",
+            shopify_id_column="#",
             client_column="To_Match_Client_Nutrition",
             dish_column="Dish ID",
             ingredient_column="Final Ingredients",
@@ -471,7 +471,7 @@ class MealRecommendation:
         open_orders = self.db.get_all_open_orders()
         client_dish_pairs = self.build_client_dish_mapping(
             open_orders,
-            shopify_id_column="SquareSpace/ Internal OrderItem ID",
+            shopify_id_column="#",
             client_column="To_Match_Client_Nutrition",
             dish_column="Dish ID",
             ingredient_column="Final Ingredients",
