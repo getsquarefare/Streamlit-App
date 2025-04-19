@@ -328,10 +328,10 @@ class NewDishOptimizer:
         modified_recipe = {
             "ingredients": [
                 {
-                    "ingredientName": ing["ingredientName"],
-                    "Component": ing["component"],
-                    "Grams": round(ing["baseGrams"] * ing.get("scaler"), 2),
-                    "ingredientId": ing["ingredientId"]
+                    "ingredientName": f"{ing['ingredientName']} ({ing.get('scaler')} x sauce)" if ing['component'] == 'sauce' and ing.get('scaler', 1.0) != 1.0 else ing['ingredientName'],
+                    "Component": ing['component'],
+                    "Grams": round(ing['baseGrams'] * ing.get('scaler', 1.0), 2),
+                    "ingredientId": ing['ingredientId']
                 }
                 for ing in recipe
             ]

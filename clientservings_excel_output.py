@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import streamlit as st
 from io import BytesIO
 import logging
+import re
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -220,8 +221,21 @@ class AirTable():
                 # Add component amounts
                 components_output['Meat'].append(
                     '-' if client_serving['fields']['Meat (g)'] == 0 else round(client_serving['fields']['Meat (g)'], 1))
-                components_output['Sauce'].append(
-                    '-' if client_serving['fields']['Sauce (g)'] == 0 else round(client_serving['fields']['Sauce (g)'], 1))
+                
+                # Handle Sauce with special case for "n x sauce" format
+                sauce_value = client_serving['fields']['Sauce (g)']
+                sauce_text = client_serving['fields'].get('Sauce', '')
+                
+                if sauce_value == 0:
+                    components_output['Sauce'].append('-')
+                else:
+                    sauce_output = str(round(sauce_value, 1))
+                    # Extract only the "n x sauce" pattern if it exists
+                    sauce_pattern = re.search(r'\d+\s*x\s*sauce', sauce_text.lower())
+                    if sauce_pattern:
+                        sauce_output += f" ({sauce_pattern.group()})"
+                    components_output['Sauce'].append(sauce_output)
+                
                 components_output['Starch'].append(
                     '-' if client_serving['fields']['Starch (g)'] == 0 else round(client_serving['fields']['Starch (g)'], 1))
                 components_output['Veggies'].append(

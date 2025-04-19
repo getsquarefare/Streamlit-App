@@ -96,11 +96,13 @@ class AirTable():
         TO_MATCH_CLIENT_NUTRITION = 'fldjEgeRh2bGxajXT'
         DISH_ID = 'fldLOvWuvg6X9Odvw'
         PORITON_RESULT = 'fldadHgYOukaCrC6v',
-        SKIP_PORTION = "fldIKtQS5bIEr1iNU"
+        SKIP_PORTION = "fldIKtQS5bIEr1iNU",
+        INDEX = 'flddofDLsRpVLe14s'
         
         open_orders = self.open_orders_table.all(
             view='viwrZHgdsYWnAMhtX',
-            fields=[TO_MATCH_CLIENT_NUTRITION,
+            fields=[INDEX,
+                    TO_MATCH_CLIENT_NUTRITION,
                     SHOPIFY_ID,
                     DISH_ID,
                     FINAL_INGREDIENTS,
@@ -271,7 +273,7 @@ class AirTable():
         self.clientserving_table.batch_delete(id_list)
 
     def get_rcdid_by_shopify_orderlineitem(self, shopify_orderlineitem):
-        SHOPIFY_INTERNAL_ID = 'fldXVHeLiy8npzVnb'
+        SHOPIFY_INTERNAL_ID = 'flddofDLsRpVLe14s'
         fields_here = dict()
         fields_here[SHOPIFY_INTERNAL_ID] = shopify_orderlineitem
         formula = match(fields_here)
@@ -284,20 +286,16 @@ class AirTable():
         prepared_row = {}
         prepared_row['Linked OrderItem'] = [
             portion_recommendations['Linked OrderItem']]
-        prepared_row['Meat'] = ', '.join(portion_recommendations['Meat'])
-        prepared_row['Sauce'] = ', '.join(
-            portion_recommendations['Sauce'])
-        prepared_row['Starch'] = ', '.join(
-            portion_recommendations['Starch'])
+        prepared_row['Meat'] = portion_recommendations['Meat']
+        prepared_row['Sauce'] = portion_recommendations['Sauce']
+        prepared_row['Starch'] = portion_recommendations['Starch']
         prepared_row['Veggies (g)'] = portion_recommendations['Veggies (g)']
         prepared_row['Garnish (g)'] = portion_recommendations['Garnish (g)']
         prepared_row['Meat (g)'] = portion_recommendations['Meat (g)']
         prepared_row['Sauce (g)'] = portion_recommendations['Sauce (g)']
         prepared_row['Starch (g)'] = portion_recommendations['Starch (g)']
-        prepared_row['Veggies'] = ', '.join(
-            portion_recommendations['Veggies'])
-        prepared_row['Garnish'] = ', '.join(
-            portion_recommendations['Garnish'])
+        prepared_row['Veggies'] = portion_recommendations['Veggies']
+        prepared_row['Garnish'] = portion_recommendations['Garnish']
         prepared_row["Updated Nutrition Info"] = portion_recommendations["Updated Nutrition Info"]
         prepared_row['Portion Results Need Review'] = portion_recommendations['Review Needed']
         prepared_row['Explanation'] = portion_recommendations['Explanation']
