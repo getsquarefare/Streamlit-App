@@ -76,7 +76,7 @@ class AirTable():
         try:
             filter_fields = {DISH_ID: dish_id}
             formula = match(filter_fields)
-            return self.clientserving_table.all(formula=formula, fields=fields_to_return,view='viw5hROs9I9vV0YEq')
+            return self.clientserving_table.all(formula=formula, fields=fields_to_return,view='viwgt50kLisz8jx7b')
         except Exception as e:
             logger.error(f"Failed to get client servings for dish ID {dish_id}: {str(e)}")
             raise AirTableError(f"Failed to get client servings for dish ID {dish_id}: {str(e)}")
@@ -209,7 +209,7 @@ class AirTable():
                     'Delivery Date': client_serving['fields']['Delivery Date'],
                     'Client': str(client_serving['fields']['Customer Name'][0]),
                     'Allergies': client_serving['fields'].get('Nutrition Notes (from Linked OrderItem)', [""])[0],
-                    'Meal': client_serving['fields'].get('Meal Portion (from Linked OrderItem)', [''])[0].replace(' Subscriptions', ''),
+                    'Meal': client_serving['fields'].get('Meal Portion (from Linked Orderitem)', [''])[0].replace(' Subscriptions', '') if ' Subscriptions' in client_serving['fields'].get('Meal Portion (from Linked Orderitem)', [''])[0] else client_serving['fields'].get('Meal Portion (from Linked Orderitem)', [''])[0],
                     'Sticker': client_serving['fields'].get('Meal Sticker (from Linked OrderItem)', [''])[0],
                     'Dish': client_serving['fields'].get('Dish', [''])[0],
                     'All Deletions': deleted_ingredients_names
