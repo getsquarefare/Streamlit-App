@@ -44,7 +44,7 @@ def main():
     # clientservings csv download
     st.divider()
     st.header(':green[ClientServings Excel] Generator 📑')
-    st.markdown("⚠️ Source Table: [Clientservings > Sorted](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viw5hROs9I9vV0YEq?blocks=hide)")
+    st.markdown("⚠️ Source Table: [Clientservings > For Clientservings Excel Output](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viwgt50kLisz8jx7b?blocks=hide)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
     clientservings_generate_button = st.button("Get ClientServings")
 
@@ -219,7 +219,7 @@ def main():
     # dish_sticker_generator
     st.divider()
     st.header(':orange[Dish Sticker] Generator - Airtable 🥡 🍱')
-    st.markdown("⚠️ Source Table: [Open Orders > For Dish Stickers](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwxYRtkq19KcXcZX?blocks=hide)")
+    st.markdown("⚠️ Source Table: [Clientservings > Sorted (Dish Sticker)](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viw5hROs9I9vV0YEq?blocks=bipVZAG8G3VXIa12K)")
     st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
     # Template file handling with error checking

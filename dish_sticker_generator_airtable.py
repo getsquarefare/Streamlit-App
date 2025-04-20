@@ -39,25 +39,25 @@ class AirTable():
             self.base_id = "appEe646yuQexwHJo"
             
             # Initialize tables for dish stickers
-            self.dish_orders_table = Table(self.api_key, self.base_id, 'tblxT3Pg9Qh0BVZhM')
+            self.dish_orders_table = Table(self.api_key, self.base_id, 'tblVwpvUmsTS2Se51')
             
             # Define field mappings for dish stickers
             self.fields = {
-                'CLIENT': 'fldWYJStYSpX72pG3',
-                'DISH_STICKER': 'fldYZYDRjScz6ig5a',
-                'DELIVERY_DAY': 'flddRJziNBdEtrpmG',
-                'MEAL_TYPE': 'fldCsBzoy9rxKlWmN',
-                'QUANTITY': 'fldvkwFMlBOW5um2y',
-                'POSITION_ID':'fldu8pc7PsGFMRRqv',
-                'DISH_NAME':'fldegrwFVynxhDavT',
-                'DISH_ID':'fldLOvWuvg6X9Odvw'
+                'CLIENT': 'fldDs6QXE6uYKIlRk',
+                'DISH_STICKER': 'fldeUJtuijUAbklCQ',
+                'DELIVERY_DAY': 'fld6YLCoS7XCFK04G',
+                'MEAL_TYPE': 'fld00H3SpKNqTbhC0',
+                'QUANTITY': 'fldfwdu2UKbcTve4a',
+                'POSITION_ID':'fldRWwXRTzUflOPgk',
+                'DISH_NAME':'fldmqHv4aXJxuJ8E2',
+                'DISH_ID':'fldhrw7U0pV4D9Cad'
             }
         except Exception as e:
             raise AirTableError(f"Failed to initialize AirTable connection: {str(e)}")
     
     def get_all_dish_orders(self): 
         try:
-            data = self.dish_orders_table.all(fields=self.fields.values(), view='viwxYRtkq19KcXcZX')
+            data = self.dish_orders_table.all(fields=self.fields.values(), view='viw5hROs9I9vV0YEq')
             
             if not data:
                 raise AirTableError("No data retrieved from Airtable. Please check if the view has records.")
@@ -75,7 +75,7 @@ class AirTable():
             df = df.applymap(lambda x: x[0] if isinstance(x, list) and len(x) == 1 else ', '.join(map(str, x)) if isinstance(x, list) else x)
 
             # Verify required columns
-            required_columns = ['Customer Name', 'Order Type', 'Delivery Date', 'Meal Sticker', 'Quantity']
+            required_columns = ['Customer Name', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Meal Sticker (from Linked OrderItem)', 'Quantity']
             missing_columns = [col for col in required_columns if col not in df.columns]
             
             if missing_columns:
@@ -105,7 +105,7 @@ class AirTable():
                 raise DataProcessingError(f"Found {missing_delivery_dates} records with missing delivery dates")
                 
             # Create required fields for dish stickers
-            df['line_1'] = df.apply(lambda row: f"Prepared for: {row.get('Customer Name') or 'N/A'} - {row.get('Order Type') or 'N/A'}", axis=1)
+            df['line_1'] = df.apply(lambda row: f"Prepared for: {row.get('Customer Name') or 'N/A'} - {row.get('Meal Portion (from Linked OrderItem)') or 'N/A'}", axis=1)
             
             # Add best before date (delivery date + 3 days)
             def add_days(date_str, days=3):
@@ -124,7 +124,7 @@ class AirTable():
             
             # Set dish name
             df['line_3'] = df.apply(
-                lambda row: row.get('Meal Sticker') or "Dish name not available", 
+                lambda row: row.get('Meal Sticker (from Linked OrderItem)') or "Dish name not available", 
                 axis=1
             )
 
@@ -186,20 +186,20 @@ def generate_ppt(df, prs, background_path):
             raise PPTGenerationError("No data available to generate stickers")
             
         # Verify required columns
-        required_columns = ['line_1', 'line_2', 'line_3', 'Dish ID', 'Position Id (from ClientServings)']
+        required_columns = ['line_1', 'line_2', 'line_3', 'Dish ID (from Linked OrderItem)', 'Position Id']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             # Handle case where some columns are missing but we can continue
             st.warning(f"Missing or no data in columns: {', '.join(missing_columns)}. Will ignore.")
             for col in missing_columns:
-                if col in ['Dish ID', 'Position Id']:
+                if col in ['Dish ID (from Linked OrderItem)', 'Position Id']:
                     df[col] = 'Unknown'  # Default values for sorting
                 else:
                     df[col] = 'Not available'  # Default values for text
         
         # Safely sort values
-        if 'Dish ID' in df.columns and 'Position Id' in df.columns:
-            df.sort_values(by=['Dish ID', 'Position Id'], ascending=[True, True], inplace=True)
+        if 'Dish ID (from Linked OrderItem)' in df.columns and 'Position Id' in df.columns:
+            df.sort_values(by=['Dish ID (from Linked OrderItem)', 'Position Id'], ascending=[True, True], inplace=True)
             
         # Get the first slide as a template
         if len(prs.slides) == 0:
@@ -275,3 +275,37 @@ def generate_dish_stickers(prs, background_path=None):
         st.info("Error details:")
         st.code(traceback.format_exc())
         return None
+
+if __name__ == "__main__":
+    # Create a new PowerPoint presentation
+    prs = Presentation()
+    
+    # Add a blank slide as template
+    blank_slide_layout = prs.slide_layouts[6]  # Using blank layout
+    slide = prs.slides.add_slide(blank_slide_layout)
+    
+    # Add three text boxes for the sticker content
+    for i in range(3):
+        left = Inches(1)
+        top = Inches(1 + i * 1.5)
+        width = Inches(8)
+        height = Inches(1)
+        textbox = slide.shapes.add_textbox(left, top, width, height)
+        text_frame = textbox.text_frame
+        p = text_frame.add_paragraph()
+        p.text = f"Line {i+1} placeholder"
+    
+    # Optional: Specify background image path
+    background_path = "background.png"  # Update this path if you have a background image
+    
+    # Generate stickers
+    result_prs = generate_dish_stickers(prs, background_path)
+    
+    if result_prs:
+        # Save the generated presentation
+        output_path = "generated_stickers.pptx"
+        result_prs.save(output_path)
+        print(f"Successfully generated stickers and saved to {output_path}")
+    else:
+        print("Failed to generate stickers. Check the error messages above.")
+    
