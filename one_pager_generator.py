@@ -99,7 +99,7 @@ class AirTable():
         df_orders["Meal Sticker"] = df_orders.apply(
             lambda row: (row["Meal Sticker"][0] if isinstance(row["Meal Sticker"], list) and len(row["Meal Sticker"]) > 0 else 
                         (str(row["Meal Sticker"]) if not isinstance(row["Meal Sticker"], list) else "Unknown")) 
-                        + ' - ' + row["Order Type"],
+                        + ' - ' + str(row.get("Order Type", "Unknown")),
             axis=1
         )
         
