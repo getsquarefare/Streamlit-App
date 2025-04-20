@@ -14,11 +14,13 @@ import pytz
 
 # Streamlit app
 def main():
+    # Current date for filename
+    
     st.title('Square Fare Toolkits 🧰')
     # Set the time zone to Eastern Standard Time (EST)
     est = pytz.timezone('US/Eastern')
     # Get the current date in EST
-    current_date = datetime.now(est).strftime('%m%d%Y')
+    current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
 
 # portion algo trigger
     st.divider()
@@ -51,7 +53,7 @@ def main():
     if clientservings_generate_button:
         try:
             with st.spinner('Generating clientservings... It may take a few minutes 🕐'):
-                updated_xlsx_name = f'{current_date}_clientservings.xlsx'
+                updated_xlsx_name = f'{current_date_time}_clientservings.xlsx'
 
                 airTable = new_database_access() 
                 all_output = airTable.consolidated_all_dishes_output()
@@ -123,7 +125,7 @@ def main():
             # Optional: Display the final DataFrame for checking
             st.subheader("Shipping Stickers")
             st.markdown(":green[Stickers are ready! Click to download]")
-            updated_ppt_name = f'{current_date}_shipping_sticker_updated.pptx'
+            updated_ppt_name = f'{current_date_time}_shipping_sticker_updated.pptx'
             prs.save(updated_ppt_name)
             with open(updated_ppt_name, "rb") as file:
                 st.download_button(
@@ -187,7 +189,7 @@ def main():
                 with st.spinner('Generating shipping stickers... It may take a few minutes 🕐'):
                     prs = generate_shipping_stickers(prs_file)
                     if prs and len(prs.slides) > 0:
-                        updated_ppt_name = f'{current_date}_shipping_sticker.pptx'
+                        updated_ppt_name = f'{current_date_time}_shipping_sticker.pptx'
                         prs.save(updated_ppt_name)
                         st.success(f"✅ Successfully generated {len(prs.slides)} shipping stickers!")
                         
@@ -250,9 +252,6 @@ def main():
         st.error(f"File upload error: {str(e)}")
         st.stop()
 
-    # Current date for filename
-    current_date = datetime.now().strftime("%Y%m%d")
-
     # Generate button
     st.markdown("⚠️ Make sure you grouped orders by Dish ID and generate position id in Airtable, before running this generator")
     dish_sticker_generate_button = st.button("I have applied position id, lets get Dish Stickers")
@@ -274,7 +273,7 @@ def main():
                     st.stop()
                 
                 # Save the file with error handling
-                updated_ppt_name = f'{current_date}_dish_sticker.pptx'
+                updated_ppt_name = f'{current_date_time}_dish_sticker.pptx'
                 try:
                     prs.save(updated_ppt_name)
                     st.success(f"Successfully saved {updated_ppt_name}")
@@ -321,9 +320,7 @@ def main():
             template_path = 'template/One_Pager_Template_v2.pptx'  # Default path
             
             if new_one_pager_template is not None:
-                template_path = f"temp_template_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pptx"
-                with open(template_path, "wb") as f:
-                    f.write(new_one_pager_template.getbuffer())
+                template_path = new_one_pager_template
             
             # Load template
             prs_file = Presentation(template_path)
@@ -336,7 +333,7 @@ def main():
             prs = generate_one_pagers(prs_file)
             
             # Save the result
-            updated_ppt_name = f'{current_date}__one_sheeter.pptx'
+            updated_ppt_name = f'{current_date_time}__one_sheeter.pptx'
             prs.save(updated_ppt_name)
             
             # Clean up temporary files
