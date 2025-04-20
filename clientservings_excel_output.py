@@ -230,10 +230,10 @@ class AirTable():
                     components_output['Sauce'].append('-')
                 else:
                     sauce_output = str(round(sauce_value, 1))
-                    # Extract only the "n x sauce" pattern if it exists
-                    sauce_pattern = re.search(r'\d+\s*x\s*sauce', sauce_text.lower())
-                    if sauce_pattern:
-                        sauce_output += f" ({sauce_pattern.group()})"
+                    # Extract any content in parentheses if it exists
+                    parentheses_pattern = re.search(r'\((.*?)\)', sauce_text)
+                    if parentheses_pattern:
+                        sauce_output += f" ({parentheses_pattern.group(1)})"
                     components_output['Sauce'].append(sauce_output)
                 
                 components_output['Starch'].append(

@@ -1017,7 +1017,7 @@ class NewDishOptimizer:
             for item in recipe:
                 if item['component'] == 'sauce':
                     if self.double_sauce:
-                        item['scaler'] = 2.0
+                        item['scaler'] = 2
                     else:
                         item['scaler'] = 1.0
                 elif item['component'] == 'garnish':
@@ -1042,7 +1042,7 @@ class NewDishOptimizer:
             for ing in recipe:
                 if ing['component'] == 'sauce':
                     if self.double_sauce:
-                        ing['scaler'] = 2.0
+                        ing['scaler'] = 2
                     else:
                         ing['scaler'] = 1.0
                 elif ing['component'] == 'garnish':
