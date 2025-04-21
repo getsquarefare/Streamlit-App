@@ -209,7 +209,7 @@ class AirTable():
                     'Delivery Date': client_serving['fields']['Delivery Date'],
                     'Client': str(client_serving['fields']['Customer Name'][0]),
                     'Allergies': client_serving['fields'].get('Nutrition Notes (from Linked OrderItem)', [""])[0],
-                    'Meal': client_serving['fields'].get('Meal Portion (from Linked Orderitem)', [''])[0].replace(' Subscriptions', '') if ' Subscriptions' in client_serving['fields'].get('Meal Portion (from Linked Orderitem)', [''])[0] else client_serving['fields'].get('Meal Portion (from Linked Orderitem)', [''])[0],
+                    'Meal': client_serving['fields'].get('Meal Portion (from Linked OrderItem)', [''])[0].strip(),
                     'Sticker': client_serving['fields'].get('Meal Sticker (from Linked OrderItem)', [''])[0],
                     'Dish': client_serving['fields'].get('Dish', [''])[0],
                     'All Deletions': deleted_ingredients_names
