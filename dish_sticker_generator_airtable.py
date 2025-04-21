@@ -47,7 +47,7 @@ class AirTable():
                 'DISH_STICKER': 'fldeUJtuijUAbklCQ',
                 'DELIVERY_DAY': 'fld6YLCoS7XCFK04G',
                 'MEAL_TYPE': 'fld00H3SpKNqTbhC0',
-                'QUANTITY': 'fldfwdu2UKbcTve4a',
+                '#_OF_PARTS': 'fldXQtCqYqN2hFmd2',
                 'POSITION_ID':'fldRWwXRTzUflOPgk',
                 'DISH_NAME':'fldmqHv4aXJxuJ8E2',
                 'DISH_ID':'fldhrw7U0pV4D9Cad'
@@ -75,7 +75,7 @@ class AirTable():
             df = df.applymap(lambda x: x[0] if isinstance(x, list) and len(x) == 1 else ', '.join(map(str, x)) if isinstance(x, list) else x)
 
             # Verify required columns
-            required_columns = ['Customer Name', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Meal Sticker (from Linked OrderItem)', 'Quantity']
+            required_columns = ['Customer Name', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Meal Sticker (from Linked OrderItem)', '# of Parts']
             missing_columns = [col for col in required_columns if col not in df.columns]
             
             if missing_columns:
@@ -96,8 +96,8 @@ class AirTable():
             # Validate data
             if 'Delivery Date' not in df.columns:
                 raise DataProcessingError("Missing 'Delivery Date' column in data")
-            if 'Quantity' not in df.columns:
-                raise DataProcessingError("Missing 'Quantity' column in data")
+            if '# of Parts' not in df.columns:
+                raise DataProcessingError("Missing '# of Parts' column in data")
                 
             # Check for missing values in critical fields
             missing_delivery_dates = df['Delivery Date'].isnull().sum()
@@ -133,11 +133,11 @@ class AirTable():
             df['line_2'] = df['line_2'].astype(str)
             df['line_3'] = df['line_3'].astype(str)
             
-            # Safely convert quantity to numeric
-            df['Quantity'] = pd.to_numeric(df['Quantity'], errors='coerce').fillna(1).astype(int)
+            # Safely convert # of Parts to numeric
+            df['# of Parts'] = pd.to_numeric(df['# of Parts'], errors='coerce').fillna(1).astype(int)
             
             # Duplicate rows based on portion count
-            result_df = df.loc[df.index.repeat(df['Quantity'])].reset_index(drop=True)
+            result_df = df.loc[df.index.repeat(df['# of Parts'])].reset_index(drop=True)
             if result_df.empty:
                 raise DataProcessingError("No data after processing. Check if quantities are valid.")
                 
