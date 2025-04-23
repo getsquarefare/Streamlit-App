@@ -269,7 +269,7 @@ class AirTable():
     def consolidated_all_dishes_output(self):
         """Consolidate output for all dishes"""
         try:
-            all_clientservings = self.clientserving_table.all(fields=['Dish ID (from Linked OrderItem)'],view='viw5hROs9I9vV0YEq')
+            all_clientservings = self.clientserving_table.all(fields=['Dish ID (from Linked OrderItem)'],view='viwgt50kLisz8jx7b')
             all_dishes = set()
             all_output = pd.DataFrame()
             
