@@ -101,7 +101,7 @@ class MealRecommendation:
         ]
 
         # Each customer has exactly one constraint - choose from existing ones or customize
-        constraint_id = customer_requirements["Portion Algo Constraints"][0]
+        constraint_id = customer_requirements.get("Portion Algo Constraints",[])[0]
         constraints: dict = self.db.get_constraints_details_by_rcdId(id=constraint_id)
         constraints: dict = constraints.get("fields", {})
 
@@ -132,7 +132,7 @@ class MealRecommendation:
         # Retrieve additional constraints
         # Param - Sauce Grams
         sauce_grams = constraints.get("Sauce Amount", None)
-        double_sauce = customer_requirements.get("Double Sauce", None)
+        double_sauce = "Double Sauce" in customer_requirements.get("Customization Tags", [])
         # Param - Veggie Ge Starch
         veggie_ge_starch = constraints.get("Veggie >= Starch", None)
         # Param - Min Meat per 100 Cal
