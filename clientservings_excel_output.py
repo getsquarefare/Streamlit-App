@@ -270,6 +270,8 @@ class AirTable():
         """Consolidate output for all dishes"""
         try:
             all_clientservings = self.clientserving_table.all(fields=['Dish ID (from Linked OrderItem)'],view='viwgt50kLisz8jx7b')
+            if len(all_clientservings) == 0:
+                raise AirTableError("No clientservings found in the source view. Please check the view and try again.")
             all_dishes = set()
             all_output = pd.DataFrame()
             
