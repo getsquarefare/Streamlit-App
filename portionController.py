@@ -540,7 +540,7 @@ class MealRecommendation:
             zero_goals.append("fiber")
             
         if len(zero_goals) > 2:
-            raise PortioningError(f"Skipping order {shopify_id}: More than 2 zero nutrition goals detected for {', '.join(zero_goals)}")
+            raise PortioningError(f"Skipping order {shopify_id}: More than 2 zero nutrition goals detected for {client['identifier']}: {', '.join(zero_goals)}")
         
         dish = self.db.get_dish_calc_nutritions_by_dishId(dish_id=dish_id)
         final_ingredients_set = set()
