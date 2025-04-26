@@ -12,6 +12,16 @@ from DishOptimizerLLM import LLMDishOptimizer
 from DishOptimizerIFELSE import NewDishOptimizer
 
 
+# Custom exception classes
+class AirtableDataError(Exception):
+    """Exception raised for errors in Airtable data structure or content."""
+    pass
+
+class PortioningError(Exception):
+    """Exception raised for errors during the portioning process."""
+    pass
+
+
 if __name__ == "__main__":
     import os
     import sys
@@ -433,39 +443,60 @@ class MealRecommendation:
     def generate_recommendations_with_thread(self):
         #self.db.delete_all_clientservings() # only when reset
         open_orders = self.db.get_all_open_orders()
-        client_dish_pairs = self.build_client_dish_mapping(
-            open_orders,
-            shopify_id_column="#",
-            client_column="To_Match_Client_Nutrition",
-            dish_column="Dish ID",
-            ingredient_column="Final Ingredients",
-            deletion_column="Deletions",
-            skip_portioning_column="Skip Portioning"
-        )
-        protein_type_mapping = self.db.get_protein_group_mapping()
         finishedCount = 0
         failedCount = 0
         failedCases = []
-        # Create a ThreadPoolExecutor to run tasks concurrently
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            try:
-                future_to_pair = {
-                    executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning, protein_type_mapping): 
-                    (shopify_id, client_id, dish_id) 
-                    for shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning in client_dish_pairs
-                }
-            except Exception as e:
-                    failedCount += 1
-                    failedCases.append(f"Error processing recommendation for Dish ID {dish_id} (Client ID {client_id}): {e.__class__.__name__} - {str(e.__traceback__)}\n")
-
-            for future in as_completed(future_to_pair):
-                shopify_id, client_id, dish_id = future_to_pair[future]
+        
+        try:
+            client_dish_pairs = self.build_client_dish_mapping(
+                open_orders,
+                shopify_id_column="#",
+                client_column="To_Match_Client_Nutrition",
+                dish_column="Dish ID",
+                ingredient_column="Final Ingredients",
+                deletion_column="Deletions",
+                skip_portioning_column="Skip Portioning"
+            )
+            protein_type_mapping = self.db.get_protein_group_mapping()
+            
+            # Create a ThreadPoolExecutor to run tasks concurrently
+            with ThreadPoolExecutor(max_workers=5) as executor:
                 try:
-                    future.result()
-                    finishedCount += 1
+                    future_to_pair = {
+                        executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning, protein_type_mapping): 
+                        (shopify_id, client_id, dish_id) 
+                        for shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning in client_dish_pairs
+                    }
                 except Exception as e:
+                    error_message = str(e)
                     failedCount += 1
-                    failedCases.append(f"Error processing recommendation for Dish ID {dish_id} (Client ID {client_id}): {e.__class__.__name__} - {str(e.__context__)} - error: {str(e)}")
+                    failedCases.append(f"Error creating futures: {error_message}")
+
+                for future in as_completed(future_to_pair):
+                    shopify_id, client_id, dish_id = future_to_pair[future]
+                    try:
+                        future.result()
+                        finishedCount += 1
+                    except PortioningError as pe:
+                        # Handle portioning errors specifically
+                        error_message = str(pe)
+                        failedCount += 1
+                        failedCases.append(f"Portioning error for order {shopify_id}: {error_message}")
+                    except Exception as e:
+                        # Handle any other exceptions
+                        error_message = str(e)
+                        failedCount += 1
+                        failedCases.append(f"Error processing recommendation for open order {shopify_id}: {error_message}")
+        except AirtableDataError as ade:
+            # Handle Airtable data errors specifically
+            error_message = str(ade)
+            failedCases.append(f"Airtable data error: {error_message}")
+        except Exception as e:
+            # Handle any other exceptions
+            error_message = str(e)
+            failedCount += 1
+            failedCases.append(f"Unexpected error: {error_message}")
+                
         return finishedCount, failedCount, failedCases
 
     def generate_recommendations(self):
@@ -489,7 +520,28 @@ class MealRecommendation:
     def process_recommendation(self, shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning,protein_type_mapping):
         # Extracted recommendation logic for concurrent execution in generate_recommendations
         
+        # Check if final_ingredients is None or empty
+        if final_ingredients is None or len(final_ingredients) == 0:
+            raise PortioningError(f"Skipping order {shopify_id}: No final ingredients provided")
+        
         client = self.db.get_client_details(recId=client_id)
+        
+        # Check if any nutrition goals are zero
+        zero_goals = []
+        if "goal_calories" in client and client["goal_calories"] == 0:
+            zero_goals.append("calories")
+        if "goal_protein(g)" in client and client["goal_protein(g)"] == 0:
+            zero_goals.append("protein")
+        if "goal_carbs(g)" in client and client["goal_carbs(g)"] == 0:
+            zero_goals.append("carbs")
+        if "goal_fat(g)" in client and client["goal_fat(g)"] == 0:
+            zero_goals.append("fat")
+        if "goal_fiber(g)" in client and client["goal_fiber(g)"] == 0:
+            zero_goals.append("fiber")
+            
+        if len(zero_goals) > 2:
+            raise PortioningError(f"Skipping order {shopify_id}: More than 2 zero nutrition goals detected for {', '.join(zero_goals)}")
+        
         dish = self.db.get_dish_calc_nutritions_by_dishId(dish_id=dish_id)
         final_ingredients_set = set()
         orig_ingredients_set = set()
@@ -615,14 +667,20 @@ class MealRecommendation:
         skip_portioning_column
     ):
         client_dish_pairs = []
+        problematic_records = []  # List to track problematic records
 
-        for open_order in open_orders:
-            if "fields" not in open_order:
-                continue
+        for open_order in open_orders:  
             record_data = open_order["fields"]
+            shopify_id = record_data.get(shopify_id_column, "Unknown")
 
-            if client_column not in record_data or dish_column not in record_data:
+            # Check for missing required columns
+            if client_column not in record_data:
+                problematic_records.append(f"Order {shopify_id} missing required client data")
                 continue
+            if dish_column not in record_data:
+                problematic_records.append(f"Order {shopify_id} missing required dish data")
+                continue
+                
             final_ingredients = []
             deletions = []
 
@@ -630,16 +688,24 @@ class MealRecommendation:
                 final_ingredients = record_data[ingredient_column]
             if deletion_column is not None and deletion_column in record_data:
                 deletions = record_data[deletion_column]
-            shopify_id = record_data[shopify_id_column]
+                
             client_id = record_data[client_column][0]
             dish_id = record_data[dish_column]
+            
             if skip_portioning_column in record_data and record_data[skip_portioning_column] is not None:
                 skip_portioning = record_data[skip_portioning_column]
             else:
                 skip_portioning = False
+                
             client_dish_pairs.append(
-                (shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning)
+                (shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning)
             )
+                
+        # If there were any problematic records, raise an exception with all of them
+        if problematic_records:
+            error_message = f"Found {len(problematic_records)} problematic records when in preparation stage of cleaning data\n {';\n '.join(problematic_records)}"
+            raise AirtableDataError(error_message)
+                
         return client_dish_pairs
 
 

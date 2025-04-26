@@ -39,9 +39,13 @@ def main():
             elapsed_time_str = str(timedelta(seconds=elapsed_time))
             elapsed_time_str = elapsed_time_str.split(".")[0] + "." + elapsed_time_str.split(".")[1][:2]
         st.success(f"{finishedCount} orders completed in {elapsed_time_str} seconds! ✅")
-        if failedCount > 0:
-            st.error(f"{failedCount} orders failed to process. Please review the following cases:")
-            st.write(failedCases)
+        if len(failedCases) > 0:
+            if failedCount > 0:
+                st.error(f"{failedCount} orders failed to process. Please review the following cases:")
+                st.write(failedCases)
+            else:
+                st.error("Portioning stopped half way through, please correct the following cases and re-run the algorithm:")
+                st.write(failedCases)
 
     # clientservings csv download
     st.divider()
