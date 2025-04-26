@@ -132,7 +132,10 @@ class MealRecommendation:
         # Retrieve additional constraints
         # Param - Sauce Grams
         sauce_grams = constraints.get("Sauce Amount", None)
-        double_sauce = "Double Sauce" in customer_requirements.get("Customization Tags", [])
+        customization_tags = customer_requirements.get("Customization Tags", [])
+        if customization_tags is None:
+            customization_tags = []
+        double_sauce = "Double Sauce" in customization_tags
         # Param - Veggie Ge Starch
         veggie_ge_starch = constraints.get("Veggie >= Starch", None)
         # Param - Min Meat per 100 Cal
