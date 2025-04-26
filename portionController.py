@@ -703,7 +703,10 @@ class MealRecommendation:
                 
         # If there were any problematic records, raise an exception with all of them
         if problematic_records:
-            error_message = f"Found {len(problematic_records)} problematic records when in preparation stage of cleaning data\n {';\n '.join(problematic_records)}"
+            error_message = "Found {} problematic records when in preparation stage of cleaning data\n{}".format(
+                len(problematic_records),
+                ";\n".join(problematic_records)
+            )
             raise AirtableDataError(error_message)
                 
         return client_dish_pairs
