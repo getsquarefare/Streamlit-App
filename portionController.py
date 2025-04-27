@@ -543,6 +543,9 @@ class MealRecommendation:
             raise PortioningError(f"Skipping order {shopify_id}: More than 2 zero nutrition goals detected for {client['identifier']}: {', '.join(zero_goals)}")
         
         dish = self.db.get_dish_calc_nutritions_by_dishId(dish_id=dish_id)
+        if any(ing['Grams'] == 0 for ing in dish):
+            raise ValueError(f"Skipping order {shopify_id}: At least one ingredient has zero starting grams in the dish {dish_id}")
+
         final_ingredients_set = set()
         orig_ingredients_set = set()
         final_dish = []
