@@ -355,7 +355,7 @@ class MealRecommendation:
                 "Customer_LName": client.get("Last_Name", "Unknown"),
                 "Delivery Date": "NA",
                 "All Deletions": deletions,
-                "Meat": ", ".join([ing["Ingredient Name"] for ing in dish if ing["Component (from Ingredient)"][0].lower() == "protein"]),
+                "Meat": ", ".join([ing["Ingredient Name"] for ing in dish if ing["Component (from Ingredient)"][0].lower() == "meat"]),
                 "Meat (g)": meat_g,
                 "Sauce": ", ".join([ing["Ingredient Name"] for ing in dish if ing["Component (from Ingredient)"][0].lower() == "sauce"]),
                 "Sauce (g)": sauce_g,
