@@ -593,7 +593,7 @@ class NewDishOptimizer:
                 if adjustment != 0:
                     # Apply adjustment
                     current_scaler = adjusted_recipe[idx].get('scaler', 1.0)
-                    new_scaler = current_scaler * (1.0 + adjustment)
+                    new_scaler = max(0.1, current_scaler * (1.0 + adjustment))
                     
                     if self._is_valid_adjustment(adjusted_recipe, idx, new_scaler):
                         # Update scaler and recalculate nutrition
