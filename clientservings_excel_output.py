@@ -81,7 +81,7 @@ class AirTable():
             logger.error(f"Failed to get client servings for dish ID {dish_id}: {str(e)}")
             raise AirTableError(f"Failed to get client servings for dish ID {dish_id}: {str(e)}")
 
-    def get_dish_default_ingredients(self, dish_id):
+    def get_dish_squarespace_name(self, dish_id):
         """Get default ingredients for a specific dish"""
         try:
             DISH_ID = 'fldQbBplmx4oOHhR4'
@@ -89,18 +89,36 @@ class AirTable():
             formula = match(filter_fields)
             
             dish_ingredients_records = self.dishes_table.all(formula=formula)
-            dish_all_ingredients = []
+            name = ''
             
             for dish_ingredient in dish_ingredients_records:
-                ingredients = dish_ingredient['fields'].get('Ingredients', [])
-                if ingredients:
-                    dish_all_ingredients.append(ingredients)
-                    
-            return dish_all_ingredients
+                tmp_name = dish_ingredient['fields'].get('SquareSpace Product Name', None)
+                if tmp_name:
+                    name = tmp_name
+            return name
         except Exception as e:
-            logger.error(f"Failed to get default ingredients for dish ID {dish_id}: {str(e)}")
-            raise AirTableError(f"Failed to get default ingredients for dish ID {dish_id}: {str(e)}")
+            logger.error(f"Failed to get SquareSpace Product Name for dish ID {dish_id}: {str(e)}")
+            raise AirTableError(f"Failed to get SquareSpace Product Name for dish ID {dish_id}: {str(e)}")
 
+    def get_dish_default_ingredients(self, dish_id):
+            """Get default ingredients for a specific dish"""
+            try:
+                DISH_ID = 'fldQbBplmx4oOHhR4'
+                filter_fields = {DISH_ID: dish_id}
+                formula = match(filter_fields)
+                
+                dish_ingredients_records = self.dishes_table.all(formula=formula)
+                dish_all_ingredients = []
+                
+                for dish_ingredient in dish_ingredients_records:
+                    ingredients = dish_ingredient['fields'].get('Ingredient', [])
+                    if ingredients:
+                        dish_all_ingredients.append(ingredients[0])
+                        
+                return dish_all_ingredients
+            except Exception as e:
+                logger.error(f"Failed to get default ingredients for dish ID {dish_id}: {str(e)}")
+                raise AirTableError(f"Failed to get default ingredients for dish ID {dish_id}: {str(e)}")
     def format_output_order_ingredients(self, deleted_ingredients, new_ingredients):
         """Format output for ordered ingredients with deletions and additions"""
         components_output = {
@@ -149,11 +167,11 @@ class AirTable():
         }
 
         try:
-            for ingredient_list in default_ingredients:
-                if not ingredient_list:
+            for ingredient in default_ingredients:
+                if not ingredient:
                     continue
                     
-                ingredient_details = self.get_ingredient_details_by_rec_id(ingredient_list[0])
+                ingredient_details = self.get_ingredient_details_by_rec_id(ingredient)
                 if ingredient_details:
                     ingredient_name = ingredient_details['Ingredient Name']
                     ingredient_component = ingredient_details['Component']
@@ -184,10 +202,12 @@ class AirTable():
         try:
             outputs = []
             default_ingredients = self.get_dish_default_ingredients(dish_id)
+            dish_product_name = self.get_dish_squarespace_name(dish_id)
             ordered_clientservings = self.get_clientservings_one_dish(dish_id)
             
             default_ingredients_formatted = self.format_output_default_ingredients(default_ingredients)
             default_ingredients_formatted[' '] = dish_id
+            default_ingredients_formatted['Position'] = dish_product_name
             
             outputs.append(default_ingredients_formatted)
             
@@ -211,8 +231,9 @@ class AirTable():
                     'Allergies': client_serving['fields'].get('Nutrition Notes (from Linked OrderItem)', [""])[0],
                     'Meal': client_serving['fields'].get('Meal Portion (from Linked OrderItem)', [''])[0].strip(),
                     'Sticker': client_serving['fields'].get('Meal Sticker (from Linked OrderItem)', [''])[0],
-                    'Dish': client_serving['fields'].get('Dish', [''])[0],
-                    'All Deletions': deleted_ingredients_names
+                    #'Dish': client_serving['fields'].get('Dish', [''])[0],
+                    'All Deletions': deleted_ingredients_names,
+                    'Portions': 1
                 }
                 
                 # Get components output
@@ -300,7 +321,7 @@ class AirTable():
             logger.info('Generating Excel file for formatted client servings')
             # Select and reorder columns
             formatted_clientservings = formatted_clientservings[[
-                ' ', 'Dish', 'Position', 'Client', 'Meal', 'Delivery Date', 
+                'Position', 'Client', 'Meal','Portions','Delivery Date', 
                 'All Deletions', 'Sauce', 'Garnish', 'Starch', 'Veggies', 
                 'Meat', 'Allergies'
             ]]
@@ -316,7 +337,7 @@ class AirTable():
 
                 # Apply row colors based on NaN index
                 for i, row in enumerate(sheet.iter_rows(min_row=2, max_row=sheet.max_row, min_col=1, max_col=sheet.max_column)):
-                    if pd.isna(formatted_clientservings.loc[i, 'Position']):
+                    if pd.isna(formatted_clientservings.loc[i, 'Delivery Date']):
                         for cell in row:
                             cell.fill = blue_fill
 
@@ -340,7 +361,11 @@ if __name__ == "__main__":
     try:
         ac = new_database_access()
         all_output = ac.consolidated_all_dishes_output()
-        ac.generate_clientservings_excel(all_output)
+        file = ac.generate_clientservings_excel(all_output)
+        
+        # Write the BytesIO content to a file
+        with open('clientservings_excel_output_'+datetime.now().strftime("%Y%m%d")+'.xlsx', 'wb') as f:
+            f.write(file.getvalue())
         logger.info("Successfully generated Excel file")
     except AirTableError as e:
         logger.critical(f"Application error: {str(e)}")
