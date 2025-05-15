@@ -14,6 +14,8 @@ import xml.etree.ElementTree as ET
 from lxml import etree
 from pptx.oxml import parse_xml
 
+ICE_PACK_TAG = 'Ice Pack'
+
 class AirTable():
     def __init__(self, ex_api_key=None):
         # Load environment variables from the .env file
@@ -39,7 +41,8 @@ class AirTable():
             'SHIPPING_COUNTRY': 'fldnP3H74kAXKaIhN',
             'SHIPPING_POSTAL_CODE': 'fldwqwf7WSbiP0hJg',
             'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W',
-            'CUSTOMER_NAME': 'fldWYJStYSpX72pG3',   
+            'CUSTOMER_NAME': 'fldWYJStYSpX72pG3',
+               
         }
         
         # Define field mappings for clients info
@@ -182,12 +185,82 @@ class AirTable():
         
         # IMPROVEMENT: First merge the dataframes, then calculate page indices
         df_merge = df_orders.merge(df_clients, on='CLIENT', how='left')
-        # print('df_merge.columns:', df_merge.columns)
-        # Now calculate page indices after merging
+        
+        # Calculate initial page indices
         page_size = 6
         df_merge['Index'] = df_merge.groupby(['Customer Name','Shipping Address 1']).cumcount()
         df_merge['page_number'] = df_merge['Index'] // page_size
-
+        
+        # Function to calculate total characters in meal stickers for a group
+        def get_total_chars(group):
+            return group['Meal Sticker'].str.len().sum()
+        
+        # Split pages with long meal sticker names
+        df_merge['temp_group'] = df_merge.groupby(['Customer Name', 'Shipping Address 1', 'page_number']).ngroup()
+        page_splits = []
+        
+        for group_id in df_merge['temp_group'].unique():
+            group = df_merge[df_merge['temp_group'] == group_id].copy()
+            if len(group) == 6 and get_total_chars(group) > 1000:  # If page is full and has long names
+                # Split into two pages: 5 items + ice pack, and 1 item + ice pack
+                first_page = group.iloc[:5].copy()
+                second_page = group.iloc[5:].copy()
+                
+                # Update page numbers
+                first_page['page_number'] = group['page_number'].iloc[0]
+                second_page['page_number'] = group['page_number'].iloc[0] + 1
+                
+                # Update indices
+                first_page['Index'] = range(len(first_page))
+                second_page['Index'] = range(len(second_page))
+                
+                page_splits.append((first_page, second_page))
+            else:
+                page_splits.append((group, None))
+        
+        # Reconstruct dataframe with split pages
+        new_dfs = []
+        for first, second in page_splits:
+            new_dfs.append(first)
+            if second is not None:
+                new_dfs.append(second)
+        
+        df_merge = pd.concat(new_dfs, ignore_index=True)
+        df_merge = df_merge.drop('temp_group', axis=1)
+        
+        # Add ice pack rows for customers who have ice pack tag
+        customers_with_ice_pack = df_merge[df_merge['Customization Tags'].apply(lambda x: isinstance(x, list) and ICE_PACK_TAG in x)]['Customer Name'].unique()
+        
+        ice_pack_rows = []
+        for customer in customers_with_ice_pack:
+            # Get all pages for this customer
+            customer_pages = df_merge[df_merge['Customer Name'] == customer]
+            max_page = int(customer_pages['page_number'].max())
+            
+            # Add ice pack to each page
+            for page in range(max_page + 1):
+                # Get items for this page
+                page_items = customer_pages[customer_pages['page_number'] == page]
+                if not page_items.empty:
+                    # Get the last row for this page to copy details
+                    customer_row = page_items.iloc[-1].copy()
+                    # Create ice pack row
+                    ice_pack_row = customer_row.copy()
+                    ice_pack_row['Meal Sticker'] = 'Ice Pack'
+                    ice_pack_row['Index'] = page_items['Index'].max() + 1  # Make it the next index after the last item
+                    ice_pack_row['page_number'] = page  # Keep it on the same page
+                    ice_pack_rows.append(ice_pack_row)
+        
+        if ice_pack_rows:
+            df_merge = pd.concat([df_merge, pd.DataFrame(ice_pack_rows)], ignore_index=True)
+        
+        # Sort so ice pack rows are at the bottom of each group
+        df_merge['is_ice_pack'] = df_merge['Meal Sticker'] == 'Ice Pack'
+        df_merge = df_merge.sort_values(['Customer Name', 'Shipping Address 1', 'is_ice_pack'])
+        
+        # Remove the temporary sorting column
+        df_merge = df_merge.drop('is_ice_pack', axis=1)
+        
         # Simple groupby to create page-level information
         df_grouped = df_merge.groupby(['Customer Name', 'page_number']).agg({
             # Keep the first occurrence of these customer details per page
