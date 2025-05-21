@@ -96,7 +96,7 @@ class AirTable():
                 return pd.DataFrame()
             df.dropna(subset=['Shipping Name', 'Shipping Address 1','Quantity'], inplace=True)
             logger.info("Processing order data")
-            portion_per_sticker = 6
+            portion_per_sticker = 6.8
             
             # Check if required columns exist
             required_cols = ['Quantity', 'Order Type', 'Shipping Phone', 'Shipping Province',
@@ -110,8 +110,8 @@ class AirTable():
             
             # Process quantity based on order type
             df['Quantity'] = df.apply(
-                lambda row: row['Quantity'] * 0.5 if row['Order Type'] == 'Breakfast' 
-                else (row['Quantity'] * 0.25 if row['Order Type'] == 'Snack' else row['Quantity']), 
+                lambda row: 1 * 0.8 if row['Order Type'] == 'Breakfast' 
+                else (1 * 0.1 if row['Order Type'] == 'Snack' else 1), 
                 axis=1
             )
             
