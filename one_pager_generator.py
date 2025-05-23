@@ -568,7 +568,7 @@ def generate_ppt(df, prs, background_path):
         # Add background if needed
         if background_path:
             new_slide = insert_background(new_slide, background_path)
-    
+    copy_slide_with_images(instruction_slide, prs)
     # Remove the template slides (first N slides)
     for _ in range(len(template_slides)):
         rId = prs.slides._sldIdLst[0].rId
