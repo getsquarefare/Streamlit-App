@@ -288,10 +288,10 @@ class MealRecommendation:
             "Total Protein (g)": nutritional_information["Protein"],
             "Total Fat (g)": nutritional_information["Fat"],
             "Total Fiber (g)": nutritional_information["Fiber"],
-            "Updated Nutrition Info": str(nutritional_information),
+            "Updated Nutrition Info": json.dumps(nutritional_information),
             "Review Needed": review_needed,
             "Explanation": explanation,
-            "Modified Recipe Details": str({item['ingredientId']: item['Grams'] for item in dish})
+            "Modified Recipe Details": json.dumps({item['ingredientId']: item['Grams'] for item in dish}),
         }
         return recommendation_summary
 
@@ -370,10 +370,11 @@ class MealRecommendation:
                 "Total Protein (g)": nutritional_information.get("Protein", "N/A"),
                 "Total Fat (g)": nutritional_information.get("Fat", "N/A"),
                 "Total Fiber (g)": nutritional_information.get("Fiber", "N/A"),
-                "Updated Nutrition Info": str(nutritional_information),
+                "Updated Nutrition Info": json.dumps(nutritional_information),
                 "Review Needed": review_needed,
                 "Explanation": explanation,
-                "Modified Recipe Details": str({item['Ingredient ID']: item['Grams'] for item in dish})
+                "Modified Recipe Details": json.dumps({item['Ingredient ID']: item['Grams'] for item in dish}),
+            
             }
             return recommendation_summary
     def get_ingrdts_one_component(self, component, final_ingredients):

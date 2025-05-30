@@ -337,19 +337,27 @@ class NewDishOptimizer:
             ]
         }
         
+        # Calculate percentages
+        percentages = {}
+        for nutrient in ['kcal', 'protein(g)', 'fat(g)', 'dietaryFiber(g)', 'carbohydrate(g)']:
+            if self.customer_requirements[nutrient] != 0:
+                percentages[nutrient] = round(nutrition_totals[nutrient] / self.customer_requirements[nutrient] * 100, 1)
+            else:
+                percentages[nutrient] = 0
+
         # Format explanation string
         explanation = (
             f"\nAchieved / Target Nutrition:\n"
             f"kcal: {nutrition_totals['kcal']:.1f} / {self.customer_requirements['kcal']:.1f} "
-            f"({(nutrition_totals['kcal']/self.customer_requirements['kcal']*100 if self.customer_requirements['kcal'] != 0 else 0):.1f}% of target)\n"
+            f"({percentages['kcal']:.1f}% of target)\n"
             f"protein(g): {nutrition_totals['protein(g)']:.1f} / {self.customer_requirements['protein(g)']:.1f} "
-            f"({(nutrition_totals['protein(g)']/self.customer_requirements['protein(g)']*100 if self.customer_requirements['protein(g)'] != 0 else 0):.1f}% of target)\n"
+            f"({percentages['protein(g)']:.1f}% of target)\n"
             f"fat(g): {nutrition_totals['fat(g)']:.1f} / {self.customer_requirements['fat(g)']:.1f} "
-            f"({(nutrition_totals['fat(g)']/self.customer_requirements['fat(g)']*100 if self.customer_requirements['fat(g)'] != 0 else 0):.1f}% of target)\n"
+            f"({percentages['fat(g)']:.1f}% of target)\n"
             f"dietaryFiber(g): {nutrition_totals['dietaryFiber(g)']:.1f} / {self.customer_requirements['dietaryFiber(g)']:.1f} "
-            f"({(nutrition_totals['dietaryFiber(g)']/self.customer_requirements['dietaryFiber(g)']*100 if self.customer_requirements['dietaryFiber(g)'] != 0 else 0):.1f}% of target)\n"
+            f"({percentages['dietaryFiber(g)']:.1f}% of target)\n"
             f"carbohydrate(g): {nutrition_totals['carbohydrate(g)']:.1f} / {self.customer_requirements['carbohydrate(g)']:.1f} "
-            f"({(nutrition_totals['carbohydrate(g)']/self.customer_requirements['carbohydrate(g)']*100 if self.customer_requirements['carbohydrate(g)'] != 0 else 0):.1f}% of target)"
+            f"({percentages['carbohydrate(g)']:.1f}% of target)"
         )
         
         # Format updated nutrition info
@@ -358,7 +366,13 @@ class NewDishOptimizer:
             "Protein": round(nutrition_totals['protein(g)'], 1),
             "Carbohydrates": round(nutrition_totals['carbohydrate(g)'], 1),
             "Fiber": round(nutrition_totals['dietaryFiber(g)'], 1),
-            "Fat": round(nutrition_totals['fat(g)'], 1)
+            "Fat": round(nutrition_totals['fat(g)'], 1),
+            # Add percentage values
+            "Calories %": percentages['kcal'],
+            "Protein %": percentages['protein(g)'],
+            "Fat %": percentages['fat(g)'],
+            "Fiber %": percentages['dietaryFiber(g)'],
+            "Carbs %": percentages['carbohydrate(g)']
         }
         
         # Check constraints and prepare results

@@ -296,18 +296,24 @@ class AirTable():
         prepared_row['Starch (g)'] = portion_recommendations['Starch (g)']
         prepared_row['Veggies'] = portion_recommendations['Veggies']
         prepared_row['Garnish'] = portion_recommendations['Garnish']
-        prepared_row["Updated Nutrition Info"] = portion_recommendations["Updated Nutrition Info"]
+        # prepared_row["Updated Nutrition Info"] = portion_recommendations["Updated Nutrition Info"]
         prepared_row['Portion Results Need Review'] = portion_recommendations['Review Needed']
-        prepared_row['Explanation'] = portion_recommendations['Explanation']
+        #prepared_row['Explanation'] = portion_recommendations['Explanation']
         prepared_row['Modified Recipe Details'] = portion_recommendations.get('Modified Recipe Details', "")
 
-        # print(prepared_row)
-        # Create the record in Airtable
-        self.clientserving_table.create(prepared_row)
+        # Get nutritional values and percentages directly from updated_nutrition_info
+        nutrition_info = eval(portion_recommendations["Updated Nutrition Info"])
+        prepared_row['Calories (kcal)'] = nutrition_info['Calories']
+        prepared_row['Protein (g)'] = nutrition_info['Protein']
+        prepared_row['Fat (g)'] = nutrition_info['Fat']
+        prepared_row['Fiber (g)'] = nutrition_info['Fiber']
+        prepared_row['Carbs (g)'] = nutrition_info['Carbohydrates']
+        prepared_row['Calories %'] = nutrition_info['Calories %']/100
+        prepared_row['Protein %'] = nutrition_info['Protein %']/100
+        prepared_row['Fat %'] = nutrition_info['Fat %']/100
+        prepared_row['Fiber %'] = nutrition_info['Fiber %']/100
+        prepared_row['Carbs %'] = nutrition_info['Carbs %']/100
 
-        return
-
-        # print(prepared_row)
         # Create the record in Airtable
         self.clientserving_table.create(prepared_row)
 
