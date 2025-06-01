@@ -38,7 +38,7 @@ def main():
             elapsed_time = end_time - start_time
             elapsed_time_str = str(timedelta(seconds=elapsed_time))
             elapsed_time_str = elapsed_time_str.split(".")[0] + "." + elapsed_time_str.split(".")[1][:2]
-        st.success(f"{finishedCount} orders completed in {elapsed_time_str} seconds! ✅")
+        st.success(f"{finishedCount} orders completed in {elapsed_time_str}! ✅")
         if len(failedCases) > 0:
             if failedCount > 0:
                 st.error(f"{failedCount} orders failed to process. Please review the following cases:")

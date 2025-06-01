@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from functools import cache
 import streamlit as st
+from exceptions import AirtableDataError  # Import from new exceptions file
 
 class AirTable():
     def __init__(self, ex_api_key=None):
@@ -160,50 +161,83 @@ class AirTable():
 
 
     def get_dish_calc_nutritions_by_dishId(self, dish_id):
+        try:
+            DISH_FIELDS = {
+                'DISH_ID': 'fldQbBplmx4oOHhR4',
+                'INGREDIENT': 'fldaaMEjUKH2bCtEj'
+            }
 
-        DISH_FIELDS = {
-            'DISH_ID': 'fldQbBplmx4oOHhR4',
-            'INGREDIENT': 'fldaaMEjUKH2bCtEj'
-        }
+            formula = f"{DISH_FIELDS['DISH_ID']}={dish_id}"
 
-        formula = f"{DISH_FIELDS['DISH_ID']}={dish_id}"
+            dish_all_ingrdts = self.dishes_table.all(formula=formula)
+            if not dish_all_ingrdts:
+                raise AirtableDataError(f"No dish found with ID {dish_id}")
 
-        dish_all_ingrdts = self.dishes_table.all(formula=formula)
-        dishes_information = []
-        for dish_ingrdt in dish_all_ingrdts:
+            dishes_information = []
+            for dish_ingrdt in dish_all_ingrdts:
+                crt_ingrdt = dish_ingrdt['fields']
 
-            crt_ingrdt = dish_ingrdt['fields']
+                # Check for required fields
+                if 'Ingredient' not in crt_ingrdt or not crt_ingrdt['Ingredient']:
+                    raise AirtableDataError(f"Missing Ingredient field in dish {dish_id}")
+                if 'Grams' not in crt_ingrdt:
+                    raise AirtableDataError(f"Missing Grams field in dish {dish_id}")
+                if 'Dish ID' not in crt_ingrdt:
+                    raise AirtableDataError(f"Missing Dish ID field in dish {dish_id}")
 
-            crt_ingrdt_nutrition = self.get_ingredient_details_by_rcd_id(
-                crt_ingrdt['Ingredient'][0])
-            crt_ingrdt_nutrition["(g)"] = crt_ingrdt_nutrition.pop("Grams")
-            merged_dish_ingrdt = {'id': crt_ingrdt['Dish ID'], **
-                                  dish_ingrdt['fields'], **crt_ingrdt_nutrition}
+                try:
+                    crt_ingrdt_nutrition = self.get_ingredient_details_by_rcd_id(
+                        crt_ingrdt['Ingredient'][0])
+                    if not crt_ingrdt_nutrition:
+                        raise AirtableDataError(f"Could not find nutrition details for ingredient {crt_ingrdt['Ingredient'][0]} in dish {dish_id}")
+                except Exception as e:
+                    raise AirtableDataError(f"Error fetching ingredient details: {str(e)}")
 
-            calculate_rate = crt_ingrdt['Grams']/crt_ingrdt_nutrition['(g)']
-            merged_dish_ingrdt['id']=crt_ingrdt['Ingredient'][0]
-            merged_dish_ingrdt['energy'] = calculate_rate * (
-                merged_dish_ingrdt['Energy (kcal)'] if merged_dish_ingrdt['Energy (kcal)'] > 0 else
-                merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)'] if merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)'] > 0 else
-                0
-            )
-            # merged_dish_ingrdt['energy_Atwater'] = calculate_rate * \
-            #     merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)']
-            # merged_dish_ingrdt['Kcal'] = merged_dish_ingrdt['energy'] if merged_dish_ingrdt[
-            #     'energy'] != 0 else merged_dish_ingrdt['energy_Atwater']
-            merged_dish_ingrdt['Kcal'] = merged_dish_ingrdt['energy']
-            merged_dish_ingrdt['Protein (g)'] = calculate_rate * \
-                merged_dish_ingrdt['Protein (g)']
-            merged_dish_ingrdt['Fat, Total (g)'] = calculate_rate * \
-                merged_dish_ingrdt['Fat, Total (g)']
-            merged_dish_ingrdt['Dietary Fiber (g)'] = calculate_rate * \
-                merged_dish_ingrdt['Dietary Fiber (g)']
-            merged_dish_ingrdt['Carbohydrate, total (g)'] = calculate_rate * \
-                merged_dish_ingrdt['Carbohydrate, total (g)']
-            new_dish_ingrdt = {key: merged_dish_ingrdt[key] for key in [
-                'id', 'Airtable Dish Name', 'Component (from Ingredient)', 'Ingredient ID', 'NDB', 'Ingredient Name', 'Grams', 'Kcal', 'Protein (g)', 'Fat, Total (g)', 'Dietary Fiber (g)', 'Carbohydrate, total (g)']}
-            dishes_information.append(new_dish_ingrdt)
-        return dishes_information
+                # Check for required nutrition fields
+                required_fields = ['Grams', 'Energy (kcal)', 'Protein (g)', 'Fat, Total (g)', 
+                                 'Dietary Fiber (g)', 'Carbohydrate, total (g)']
+                missing_fields = [field for field in required_fields if field not in crt_ingrdt_nutrition]
+                if missing_fields:
+                    raise AirtableDataError(f"Missing nutrition fields {missing_fields} for ingredient {crt_ingrdt_nutrition.get('Ingredient Name')} in dish {dish_id}")
+
+                crt_ingrdt_nutrition["(g)"] = crt_ingrdt_nutrition.pop("Grams")
+                merged_dish_ingrdt = {'id': crt_ingrdt['Dish ID'], **
+                                    dish_ingrdt['fields'], **crt_ingrdt_nutrition}
+
+                try:
+                    calculate_rate = crt_ingrdt['Grams']/crt_ingrdt_nutrition['(g)']
+                    if calculate_rate <= 0:
+                        raise AirtableDataError(f"Invalid calculation rate ({calculate_rate}) for ingredient {crt_ingrdt['Ingredient'][0]} in dish {dish_id}")
+                except ZeroDivisionError:
+                    raise AirtableDataError(f"Zero division error when calculating rate for ingredient {crt_ingrdt['Ingredient'][0]} in dish {dish_id}")
+
+                merged_dish_ingrdt['id'] = crt_ingrdt['Ingredient'][0]
+                merged_dish_ingrdt['energy'] = calculate_rate * (
+                    merged_dish_ingrdt['Energy (kcal)'] if merged_dish_ingrdt['Energy (kcal)'] > 0 else
+                    merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)'] if merged_dish_ingrdt['Energy (Atwater General Factors) (kcal)'] > 0 else
+                    0
+                )
+                merged_dish_ingrdt['Kcal'] = merged_dish_ingrdt['energy']
+                merged_dish_ingrdt['Protein (g)'] = calculate_rate * merged_dish_ingrdt['Protein (g)']
+                merged_dish_ingrdt['Fat, Total (g)'] = calculate_rate * merged_dish_ingrdt['Fat, Total (g)']
+                merged_dish_ingrdt['Dietary Fiber (g)'] = calculate_rate * merged_dish_ingrdt['Dietary Fiber (g)']
+                merged_dish_ingrdt['Carbohydrate, total (g)'] = calculate_rate * merged_dish_ingrdt['Carbohydrate, total (g)']
+
+                new_dish_ingrdt = {key: merged_dish_ingrdt[key] for key in [
+                    'id', 'Airtable Dish Name', 'Component (from Ingredient)', 'Ingredient ID', 'NDB', 
+                    'Ingredient Name', 'Grams', 'Kcal', 'Protein (g)', 'Fat, Total (g)', 
+                    'Dietary Fiber (g)', 'Carbohydrate, total (g)']}
+                dishes_information.append(new_dish_ingrdt)
+
+            if not dishes_information:
+                raise AirtableDataError(f"No valid ingredients found for dish {dish_id}")
+
+            return dishes_information
+
+        except AirtableDataError:
+            raise
+        except Exception as e:
+            raise AirtableDataError(f"Unexpected error processing dish {dish_id}: {str(e)}")
 
     # changed
     def get_client_email(self, id):

@@ -5,21 +5,12 @@ from tqdm import tqdm
 import pandas as pd
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from exceptions import AirtableDataError, PortioningError  # Import from new exceptions file
 
 # Local imports
 from database import db  # Use the shared database instance
 from DishOptimizerLLM import LLMDishOptimizer
 from DishOptimizerIFELSE import NewDishOptimizer
-
-
-# Custom exception classes
-class AirtableDataError(Exception):
-    """Exception raised for errors in Airtable data structure or content."""
-    pass
-
-class PortioningError(Exception):
-    """Exception raised for errors during the portioning process."""
-    pass
 
 
 if __name__ == "__main__":
@@ -346,6 +337,17 @@ class MealRecommendation:
                     if ingredient["Component (from Ingredient)"][0] == "Garnish"
                 ]
             )
+            percentages = {}
+            for nutrient in ['Calories', 'Protein', 'Fat', 'Fiber', 'Carbohydrates']:
+                if nutritional_information[nutrient] != 0:
+                    percentages[nutrient] = round(nutritional_information[nutrient] / nutritional_information[nutrient] * 100, 1)
+                else:
+                    percentages[nutrient] = 0
+            nutritional_information["Calories %"] = percentages["Calories"]
+            nutritional_information["Protein %"] = percentages["Protein"]
+            nutritional_information["Carbs %"] = percentages["Carbohydrates"]
+            nutritional_information["Fiber %"] = percentages["Fiber"]
+            nutritional_information["Fat %"] = percentages["Fat"]
 
             recommendation_summary = {
                 "Recommendation ID": recommendation_id,
@@ -370,7 +372,7 @@ class MealRecommendation:
                 "Total Protein (g)": nutritional_information.get("Protein", "N/A"),
                 "Total Fat (g)": nutritional_information.get("Fat", "N/A"),
                 "Total Fiber (g)": nutritional_information.get("Fiber", "N/A"),
-                "Updated Nutrition Info": json.dumps(nutritional_information),
+                "Updated Nutrition Info": json.dumps(nutritional_information), 
                 "Review Needed": review_needed,
                 "Explanation": explanation,
                 "Modified Recipe Details": json.dumps({item['Ingredient ID']: item['Grams'] for item in dish}),
@@ -596,24 +598,39 @@ class MealRecommendation:
         # Check if portioning should be skipped. If so, output default recommendation summary
         if skip_portioning:
             print(f"Skipping portioning for Dish ID {dish_id} (Client ID {client_id}).")
+            nutritional_information={
+                            "Calories": round(sum(ingredient.get("Kcal", 0) for ingredient in dish), 1),
+                            "Protein": round(sum(ingredient.get("Protein (g)", 0) for ingredient in dish), 1),
+                            "Carbohydrates": round(sum(ingredient.get("Carbohydrate, total (g)", 0) for ingredient in dish), 1),
+                            "Fiber": round(sum(ingredient.get("Dietary Fiber (g)", 0) for ingredient in dish), 1),
+                            "Fat": round(sum(ingredient.get("Fat, Total (g)", 0) for ingredient in dish), 1),
+                        }
+            percentages = {}
+            for nutrient in ['kcal', 'protein(g)', 'fat(g)', 'dietaryFiber(g)', 'carbohydrate(g)']:
+                if client.get(nutrient, 0) != 0:
+                    percentages[nutrient] = round(nutritional_information[nutrient] / client[nutrient] * 100, 1)
+                else:
+                    percentages[nutrient] = 0
+            
+            nutritional_information["Calories %"] = percentages["kcal"]
+            nutritional_information["Protein %"] = percentages["protein(g)"]
+            nutritional_information["Fat %"] = percentages["fat(g)"]
+            nutritional_information["Fiber %"] = percentages["dietaryFiber(g)"]
+            nutritional_information["Carbs %"] = percentages["carbohydrate(g)"]
             default_recommendation_summary = self.get_default_recommendation_summary(
                 dish_name,
                 recommendation_id,
                 shopify_id,
                 final_dish,
                 client,
-                nutritional_information={
-                            "Calories": round(sum(ingredient.get("Kcal", 0) for ingredient in dish), 1),
-                            "Protein": round(sum(ingredient.get("Protein (g)", 0) for ingredient in dish), 1),
-                            "Carbohydrates": round(sum(ingredient.get("Carbohydrate, total (g)", 0) for ingredient in dish), 1),
-                            "Fiber": round(sum(ingredient.get("Dietary Fiber (g)", 0) for ingredient in dish), 1),
-                            "Fat": round(sum(ingredient.get("Fat, Total (g)", 0) for ingredient in dish), 1),
-                        },
+                nutritional_information=nutritional_information,
                 final_ingredients=final_ingredients,
                 deletions=deletions,
                 explanation="Portioning skipped",
                 review_needed=False
             )
+            # Calculate percentages for default recommendation
+            
             self.db.output_clientservings(default_recommendation_summary)
             return
         # try:
