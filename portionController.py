@@ -81,7 +81,11 @@ class MealRecommendation:
                 "protein(g)PerBaseGrams": float('{:.2f}'.format(item['Protein (g)'])),
                 "fat(g)PerBaseGrams":float('{:.2f}'.format(item['Fat, Total (g)'])),
                 "dietaryFiber(g)PerBaseGrams": float('{:.2f}'.format(item['Dietary Fiber (g)'])),
-                "carbohydrate(g)PerBaseGrams": float('{:.2f}'.format(item['Carbohydrate, total (g)']))
+                "carbohydrate(g)PerBaseGrams": float('{:.2f}'.format(item['Carbohydrate, total (g)'])),
+                "Sodium (mg)PerBaseGrams": float('{:.2f}'.format(item.get('Sodium (mg)', 0))),
+                "Calcium (mg)PerBaseGrams": float('{:.2f}'.format(item.get('Calcium (mg)', 0))),
+                "Phosphorus, P (mg)PerBaseGrams": float('{:.2f}'.format(item.get('Phosphorus, P (mg)', 0))),
+                "Fatty acids, total saturated (g)PerBaseGrams": float('{:.2f}'.format(item.get('Fatty acids, total saturated (g)', 0)))
             })
         
         # Return the final JSON structure
@@ -99,6 +103,10 @@ class MealRecommendation:
             "Fat, Total (g)",
             "Dietary Fiber (g)",
             "Grams",
+            "Sodium (mg)",
+            "Calcium (mg)",
+            "Phosphorus, P (mg)",
+            "Fatty acids, total saturated (g)"
         ]
 
         # Each customer has exactly one constraint - choose from existing ones or customize
@@ -164,11 +172,11 @@ class MealRecommendation:
                 grouped_ingredients[component] = {nutrient: 0.0 for nutrient in nutrients}
             
             for nutrient in nutrients:
-                grouped_ingredients[component][nutrient] += ingredient[nutrient]
+                grouped_ingredients[component][nutrient] += ingredient.get(nutrient, 0)
 
         dish = self.clean_up_dish(dish)
 
-        nutrients = ['kcal', 'protein(g)', 'fat(g)', 'dietaryFiber(g)', 'carbohydrate(g)']
+        nutrients = ['kcal', 'protein(g)', 'fat(g)', 'dietaryFiber(g)', 'carbohydrate(g)', 'Sodium (mg)', 'Calcium (mg)', 'Phosphorus, P (mg)', 'Fatty acids, total saturated (g)']
         optimizer = NewDishOptimizer(
             grouped_ingredients,
             customer_requirements,
@@ -274,11 +282,6 @@ class MealRecommendation:
             "Veggies (g)": veggies_g,
             "Garnish": ", ".join([ing["ingredientName"] for ing in dish if ing["Component"].lower() == "garnish"]),
             "Garnish (g)": garnish_g,
-            "Total Calories (kcal)": nutritional_information["Calories"],
-            "Total Carbs (g)": nutritional_information["Carbohydrates"],
-            "Total Protein (g)": nutritional_information["Protein"],
-            "Total Fat (g)": nutritional_information["Fat"],
-            "Total Fiber (g)": nutritional_information["Fiber"],
             "Updated Nutrition Info": json.dumps(nutritional_information),
             "Review Needed": review_needed,
             "Explanation": explanation,
@@ -367,11 +370,6 @@ class MealRecommendation:
                 "Veggies (g)": veggies_g,
                 "Garnish": ", ".join([ing["Ingredient Name"] for ing in dish if ing["Component (from Ingredient)"][0].lower() == "garnish"]),
                 "Garnish (g)": garnish_g,
-                "Total Calories (kcal)": nutritional_information.get("Calories", "N/A"),
-                "Total Carbs (g)": nutritional_information.get("Carbohydrates", "N/A"),
-                "Total Protein (g)": nutritional_information.get("Protein", "N/A"),
-                "Total Fat (g)": nutritional_information.get("Fat", "N/A"),
-                "Total Fiber (g)": nutritional_information.get("Fiber", "N/A"),
                 "Updated Nutrition Info": json.dumps(nutritional_information), 
                 "Review Needed": review_needed,
                 "Explanation": explanation,
@@ -379,36 +377,6 @@ class MealRecommendation:
             
             }
             return recommendation_summary
-    def get_ingrdts_one_component(self, component, final_ingredients):
-        results = []
-        for final_ingredient in final_ingredients:
-            ingredient = self.db.get_ingredient_details_by_recId(final_ingredient)
-            ingredient['id'] = final_ingredient
-            if ingredient["Component"] == component:
-                results.append(ingredient["Ingredient Name"])
-        return results
-
-    def get_component_info(self, component, final_ingredients, deletions):
-        contained = set()
-        deleted = set()
-        for final_ingredient in final_ingredients:
-            ingredient = self.db.get_ingredient_details_by_recId(final_ingredient)
-            ingredient['id'] = final_ingredient
-            if ingredient["Component"] == component:
-                contained.add(ingredient["Ingredient Name"])
-        for deletion in deletions:
-            ingredient = self.db.get_ingredient_details_by_recId(deletion)
-            ingredient['id'] = final_ingredient
-            if ingredient["Component"] == component:
-                deleted.add(ingredient["Ingredient Name"])
-        message = "Contains: "
-        for ingredient in contained:
-            message = message + ingredient + ", "
-        if len(deleted) != 0:
-            message += "\n Deletions: "
-        for ingredient in deleted:
-            message = message + ingredient + ", "
-        return message
 
     def get_dish_nutritional_information(self, dish):
         """
@@ -582,6 +550,10 @@ class MealRecommendation:
                 ingredient['Protein (g)'] = ingredient['Protein (g)'] * scale
                 ingredient['Fat, Total (g)'] = ingredient['Fat, Total (g)'] * scale
                 ingredient['Dietary Fiber (g)'] = ingredient['Dietary Fiber (g)'] * scale
+                ingredient['Sodium (mg)'] = ingredient['Sodium (mg)'] * scale
+                ingredient['Calcium (mg)'] = ingredient['Calcium (mg)'] * scale
+                ingredient['Phosphorus, P (mg)'] = ingredient['Phosphorus, P (mg)'] * scale
+                ingredient['Fatty acids, total saturated (g)'] = ingredient['Fatty acids, total saturated (g)'] * scale
                 ingredient["Grams"] = default_grams
                 ingredient["Airtable Dish Name"] = dish[0]["Airtable Dish Name"]
                 ingredient["Recommendation ID"] = shopify_id
@@ -589,7 +561,7 @@ class MealRecommendation:
                 final_dish.append(ingredient)
         
         
-        print(f"Final dish for {shopify_id}\n {final_dish}")
+        # print(f"Final dish for {shopify_id}\n {final_dish}")
         if not final_dish:
             return
         dish_name = final_dish[0]["Airtable Dish Name"]
@@ -604,6 +576,10 @@ class MealRecommendation:
                             "Carbohydrates": round(sum(ingredient.get("Carbohydrate, total (g)", 0) for ingredient in dish), 1),
                             "Fiber": round(sum(ingredient.get("Dietary Fiber (g)", 0) for ingredient in dish), 1),
                             "Fat": round(sum(ingredient.get("Fat, Total (g)", 0) for ingredient in dish), 1),
+                            "Sodium (mg)": round(sum(ingredient.get("Sodium (mg)", 0) for ingredient in dish), 1),
+                            "Calcium (mg)": round(sum(ingredient.get("Calcium (mg)", 0) for ingredient in dish), 1),
+                            "Phosphorus, P (mg)": round(sum(ingredient.get("Phosphorus, P (mg)", 0) for ingredient in dish), 1),
+                            "Fatty acids, total saturated (g)": round(sum(ingredient.get("Fatty acids, total saturated (g)", 0) for ingredient in dish), 1),
                         }
             percentages = {}
             for nutrient in ['kcal', 'protein(g)', 'fat(g)', 'dietaryFiber(g)', 'carbohydrate(g)']:
@@ -635,12 +611,10 @@ class MealRecommendation:
             return
         # try:
         # Run optimization and process response
-        response = self.optimize(final_dish, client)
+        json_part = self.optimize(final_dish, client)
         # if response.startswith("```json") and response.endswith("```"):
             # response = response[7:-3].strip()
-        print(f"Optimization response for {shopify_id} (Client ID {client_id}): {response}")
-        # json_part = json.loads(response)
-        json_part = response
+        # print(f"Optimization response for {shopify_id} (Client ID {client_id}): {response}")
         recipe = json_part.get("modified_recipe", {}).get("ingredients", [])
         nutritional_information = json_part.get(
             "updated_nutrition_info", {}

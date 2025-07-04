@@ -372,7 +372,11 @@ class NewDishOptimizer:
             "Protein %": percentages['protein(g)'],
             "Fat %": percentages['fat(g)'],
             "Fiber %": percentages['dietaryFiber(g)'],
-            "Carbs %": percentages['carbohydrate(g)']
+            "Carbs %": percentages['carbohydrate(g)'],
+            "Sodium (mg)": round(nutrition_totals.get('Sodium (mg)', 0), 1),
+            "Calcium (mg)": round(nutrition_totals.get('Calcium (mg)', 0), 1),
+            "Phosphorus, P (mg)": round(nutrition_totals.get('Phosphorus, P (mg)', 0), 1),
+            "Fatty acids, total saturated (g)": round(nutrition_totals.get('Fatty acids, total saturated (g)', 0), 1)
         }
         
         # Check constraints and prepare results
@@ -1117,35 +1121,3 @@ class NewDishOptimizer:
             return self.format_result(final_recipe, final_nutrition)
         else:
             return self.format_result(best_recipe or recipe, best_nutrition or current_nutrition)
-        
-# Example Usage and Testing
-if __name__ == "__main__":
-    # Test data setup
-    grouped_ingredients = {'veggies': {'Kcal': 83.04, 'Carbohydrate, total (g)': 15.188, 'Protein (g)': 6.409999999999999, 'Fat, Total (g)': 1.3438999999999999, 'Dietary Fiber (g)': 6.703, 'Grams': 300.0}, 'garnish': {'Kcal': 15.875238095238098, 'Carbohydrate, total (g)': 0.9524761904761906, 'Protein (g)': 0.667647619047619, 'Fat, Total (g)': 1.1679047619047618, 'Dietary Fiber (g)': 0.46209523809523806, 'Grams': 10.0}, 'protein': {'Kcal': 110.96774193548387, 'Carbohydrate, total (g)': 0.6451612903225806, 'Protein (g)': 10.32258064516129, 'Fat, Total (g)': 7.096774193548387, 'Dietary Fiber (g)': 0.6451612903225806, 'Grams': 100.0}, 'sauce': {'Kcal': 47.65, 'Carbohydrate, total (g)': 0.27, 'Protein (g)': 0.07, 'Fat, Total (g)': 5.0, 'Dietary Fiber (g)': 0.0, 'Grams': 20.0}, 'starch': {'Kcal': 112.0, 'Carbohydrate, total (g)': 23.5, 'Protein (g)': 2.32, 'Fat, Total (g)': 0.83, 'Dietary Fiber (g)': 1.8, 'Grams': 100.0}}
-    
-    customer_requirements = {'identifier': 'Brad Riew | Lunch | riew.brad@gmail.com', 'First_Name': 'Brad', 'Last_Name': 'Riew', 'goal_calories': 700, 'goal_carbs(g)': 70, 'goal_fiber(g)': 11, 'goal_fat(g)': 23, 'goal_protein(g)': 53, 'Portion Algo Constraints': ['recpZqUPjx32nuwjZ'], 'Meal': 'Lunch', '# of snacks per day': 1, 'Kcal': 700, 'Carbohydrate, total (g)': 70, 'Protein (g)': 53, 'Fat, Total (g)': 23, 'Dietary Fiber (g)': 11}
-
-    nutrients = ['kcal', 'protein(g)', 'fat(g)', 'dietaryFiber(g)', 'carbohydrate(g)']
-
-    nutrient_constraints = {'Protein (g)': {'lb': 0.8, 'ub': 1.05}, 'Kcal': {'lb': 0.95, 'ub': 1.05}, 'Fat, Total (g)': {'lb': 0.5, 'ub': 1.5}, 'Dietary Fiber (g)': {'lb': 0.6, 'ub': None}, 'Carbohydrate, total (g)': {'lb': 0.5, 'ub': 1.1}}
-
-    dish = {'dishName': 'Shroom Bowl', 'ingredients': [{'component': 'veggies', 'ingredientName': 'Shiitake Mushrooms', 'baseGrams': 20.0, 'kcalPerBaseGrams': 7.8, 'protein(g)PerBaseGrams': 0.69, 'fat(g)PerBaseGrams': 0.07, 'dietaryFiber(g)PerBaseGrams': 0.72, 'carbohydrate(g)PerBaseGrams': 1.54, 'scaler': 1.0}, {'component': 'garnish', 'ingredientName': 'Sesame Seeds', 'baseGrams': 2.0, 'kcalPerBaseGrams': 11.46, 'protein(g)PerBaseGrams': 0.35, 'fat(g)PerBaseGrams': 0.99, 'dietaryFiber(g)PerBaseGrams': 0.24, 'carbohydrate(g)PerBaseGrams': 0.47, 'scaler': 1.0}, {'component': 'garnish', 'ingredientName': 'Kimchi', 'baseGrams': 2.0, 'kcalPerBaseGrams': 0.3, 'protein(g)PerBaseGrams': 0.02, 'fat(g)PerBaseGrams': 0.01, 'dietaryFiber(g)PerBaseGrams': 0.03, 'carbohydrate(g)PerBaseGrams': 0.05, 'scaler': 1.0}, {'component': 'protein', 'ingredientName': 'Roasted Tofu', 'baseGrams': 100.0, 'kcalPerBaseGrams': 110.97, 'protein(g)PerBaseGrams': 10.32, 'fat(g)PerBaseGrams': 7.1, 'dietaryFiber(g)PerBaseGrams': 0.65, 'carbohydrate(g)PerBaseGrams': 0.65, 'scaler': 1.0}, {'component': 'veggies', 'ingredientName': 'Portobello Mushroom', 'baseGrams': 20.0, 'kcalPerBaseGrams': 6.48, 'protein(g)PerBaseGrams': 0.55, 'fat(g)PerBaseGrams': 0.06, 'dietaryFiber(g)PerBaseGrams': 0.38, 'carbohydrate(g)PerBaseGrams': 0.93, 'scaler': 1.0}, {'component': 'veggies', 'ingredientName': 'Broccoli', 'baseGrams': 100.0, 'kcalPerBaseGrams': 35.0, 'protein(g)PerBaseGrams': 2.38, 'fat(g)PerBaseGrams': 0.41, 'dietaryFiber(g)PerBaseGrams': 3.3, 'carbohydrate(g)PerBaseGrams': 7.18, 'scaler': 1.0}, {'component': 'sauce', 'ingredientName': 'Sesame Ginger Dressing', 'baseGrams': 20.0, 'kcalPerBaseGrams': 47.65, 'protein(g)PerBaseGrams': 0.07, 'fat(g)PerBaseGrams': 5.0, 'dietaryFiber(g)PerBaseGrams': 0.0, 'carbohydrate(g)PerBaseGrams': 0.27, 'scaler': 1.0}, {'component': 'garnish', 'ingredientName': 'Pickled Red Onions', 'baseGrams': 2.0, 'kcalPerBaseGrams': 0.86, 'protein(g)PerBaseGrams': 0.02, 'fat(g)PerBaseGrams': 0.0, 'dietaryFiber(g)PerBaseGrams': 0.04, 'carbohydrate(g)PerBaseGrams': 0.19, 'scaler': 1.0}, {'component': 'garnish', 'ingredientName': 'Edamame', 'baseGrams': 2.0, 'kcalPerBaseGrams': 2.8, 'protein(g)PerBaseGrams': 0.23, 'fat(g)PerBaseGrams': 0.15, 'dietaryFiber(g)PerBaseGrams': 0.1, 'carbohydrate(g)PerBaseGrams': 0.17, 'scaler': 1.0}, {'component': 'garnish', 'ingredientName': 'Cilantro', 'baseGrams': 2.0, 'kcalPerBaseGrams': 0.46, 'protein(g)PerBaseGrams': 0.04, 'fat(g)PerBaseGrams': 0.01, 'dietaryFiber(g)PerBaseGrams': 0.06, 'carbohydrate(g)PerBaseGrams': 0.07, 'scaler': 1.0}, {'component': 'veggies', 'ingredientName': 'Kale', 'baseGrams': 50.0, 'kcalPerBaseGrams': 18.0, 'protein(g)PerBaseGrams': 1.47, 'fat(g)PerBaseGrams': 0.6, 'dietaryFiber(g)PerBaseGrams': 2.0, 'carbohydrate(g)PerBaseGrams': 2.65, 'scaler': 1.0}, {'component': 'veggies', 'ingredientName': 'Cabbage', 'baseGrams': 100.0, 'kcalPerBaseGrams': 12.0, 'protein(g)PerBaseGrams': 1.1, 'fat(g)PerBaseGrams': 0.17, 'dietaryFiber(g)PerBaseGrams': 0.0, 'carbohydrate(g)PerBaseGrams': 2.23, 'scaler': 1.0}, {'component': 'starch', 'ingredientName': 'Brown Rice', 'baseGrams': 100.0, 'kcalPerBaseGrams': 112.0, 'protein(g)PerBaseGrams': 2.32, 'fat(g)PerBaseGrams': 0.83, 'dietaryFiber(g)PerBaseGrams': 1.8, 'carbohydrate(g)PerBaseGrams': 23.5, 'scaler': 1.0}, {'component': 'veggies', 'ingredientName': 'Maitake Mushrooms', 'baseGrams': 10.0, 'kcalPerBaseGrams': 3.76, 'protein(g)PerBaseGrams': 0.22, 'fat(g)PerBaseGrams': 0.03, 'dietaryFiber(g)PerBaseGrams': 0.31, 'carbohydrate(g)PerBaseGrams': 0.66, 'scaler': 1.0}]}
-
-    # Initialize optimizer with specified constraints
-    optimizer = NewDishOptimizer(
-        grouped_ingredients,  # Not needed for this test
-        customer_requirements=customer_requirements,
-        nutrients=nutrients,
-        nutrient_constraints=nutrient_constraints,
-        veggie_ge_starch=True,  # Veggies must exceed starch
-        min_meat_per_100_cal=20,  # 20g meat per 100 calories
-        max_meal_grams_per_100_cal=200,  # Maximum 200g per 100 calories
-        dish=dish
-    )
-
-    # Run optimization
-    optimized_recipe = optimizer.solve()
-
-    # Print results
-    print(optimized_recipe)
-    

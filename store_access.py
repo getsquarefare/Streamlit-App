@@ -53,11 +53,11 @@ class AirTable():
         fields_to_return = ['Ingredient ID', 'Ingredient Name',
                             'Component', 'Grams', 'Energy (kcal)', 
                             'Carbohydrate, total (g)', 'Protein (g)', 
-                            'Fat, Total (g)', 'Dietary Fiber (g)']
+                            'Fat, Total (g)', 'Dietary Fiber (g)','Sodium (mg)','Calcium (mg)', 'Phosphorus, P (mg)','Fatty acids, total saturated (g)']
         ingredients = self.ingredients_table.get(recId)
         if ingredients:
             for field in fields_to_return:
-                result[field] = ingredients['fields'][field]
+                result[field] = ingredients['fields'].get(field,0)
             return result
         else:
             return None
@@ -222,11 +222,15 @@ class AirTable():
                 merged_dish_ingrdt['Fat, Total (g)'] = calculate_rate * merged_dish_ingrdt['Fat, Total (g)']
                 merged_dish_ingrdt['Dietary Fiber (g)'] = calculate_rate * merged_dish_ingrdt['Dietary Fiber (g)']
                 merged_dish_ingrdt['Carbohydrate, total (g)'] = calculate_rate * merged_dish_ingrdt['Carbohydrate, total (g)']
+                merged_dish_ingrdt['Sodium (mg)'] = calculate_rate * merged_dish_ingrdt.get('Sodium (mg)', 0)
+                merged_dish_ingrdt['Calcium (mg)'] = calculate_rate * merged_dish_ingrdt.get('Calcium (mg)', 0)
+                merged_dish_ingrdt['Phosphorus, P (mg)'] = calculate_rate * merged_dish_ingrdt.get('Phosphorus, P (mg)', 0)
+                merged_dish_ingrdt['Fatty acids, total saturated (g)'] = calculate_rate * merged_dish_ingrdt.get('Fatty acids, total saturated (g)', 0)
 
                 new_dish_ingrdt = {key: merged_dish_ingrdt[key] for key in [
                     'id', 'Airtable Dish Name', 'Component (from Ingredient)', 'Ingredient ID', 'NDB', 
                     'Ingredient Name', 'Grams', 'Kcal', 'Protein (g)', 'Fat, Total (g)', 
-                    'Dietary Fiber (g)', 'Carbohydrate, total (g)']}
+                    'Dietary Fiber (g)', 'Carbohydrate, total (g)', 'Sodium (mg)', 'Calcium (mg)', 'Phosphorus, P (mg)', 'Fatty acids, total saturated (g)']}
                 dishes_information.append(new_dish_ingrdt)
 
             if not dishes_information:
@@ -342,6 +346,10 @@ class AirTable():
         prepared_row['Fat (g)'] = nutrition_info['Fat']
         prepared_row['Fiber (g)'] = nutrition_info['Fiber']
         prepared_row['Carbs (g)'] = nutrition_info['Carbohydrates']
+        prepared_row['Sodium (mg)'] = nutrition_info.get('Sodium (mg)', 0)
+        prepared_row['Calcium (mg)'] = nutrition_info.get('Calcium (mg)', 0)
+        prepared_row['Phosphorus, P (mg)'] = nutrition_info.get('Phosphorus, P (mg)', 0)
+        prepared_row['Fatty acids, total saturated (g)'] = nutrition_info.get('Fatty acids, total saturated (g)', 0)
         prepared_row['Calories %'] = nutrition_info['Calories %']/100
         prepared_row['Protein %'] = nutrition_info['Protein %']/100
         prepared_row['Fat %'] = nutrition_info['Fat %']/100
@@ -353,10 +361,6 @@ class AirTable():
 
         return
 
-    '''
-    input: client_identifier in string
-    output: [{'id': 'rece8d29qis33TmIm', 'createdTime': '2024-08-19T02:30:48.000Z', 'fields': {'Subscription ID': 510710139, 'Customer Name': 'Caroline Robinson', 'Status': 'ACTIVE', 'Next Delivery Date': '2024-08-26', 'Meal': 'Dinner Subscriptions', '# of Meals Included': '2', 'Customer Email': 'carolinedeanr22@gmail.com', 'Linked Client Nutrition': ['recZEZC8l3cQbjTLN'], 'Shipping Name': 'Caroline Robinson', 'Shipping Address 1': '1452 Maplewood Drive', 'Shipping City': 'New York', 'Shipping Province': 'New York', 'Shipping Country': 'United States', 'Shipping Postal Code': '10024'}}]
-    '''
 
     def get_subscription_details_by_client_identifier(self, client_identifier):
         CLIENT_IDENTIFIER_FIELD = 'fld0igiHWQd8Sgh7S'
@@ -375,7 +379,8 @@ def new_database_access():
 if __name__ == "__main__":
     ac = new_database_access()
     # ac.delete_all_recommendations()
-    result = ac.get_ingredient_details_by_recId('recBSki8u4LmiEVym')
+    # result = ac.get_ingredient_details_by_recId('recBSki8u4LmiEVym')
     # result = ac.open_orders_table.all(fields='Final Ingredients')
     # result = ac.get_protein_group_mapping()
+    result = ac.get_all_open_orders()
     print(result)
