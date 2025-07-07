@@ -19,7 +19,6 @@ from dish_sticker_generator_barcode import *
 from one_pager_generator import *
 from store_access import new_database_access
 from clientservings_excel_output import *
-from to_make_sheet_generator import new_to_make_generator
 
 # Streamlit app
 def main():
