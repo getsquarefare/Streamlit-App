@@ -17,6 +17,7 @@ import pytz
 from pptx import Presentation
 from pptx.util import Inches
 from pyairtable.api.table import Table
+import streamlit as st
 
 # Local imports
 import copy
@@ -114,7 +115,7 @@ def print_stickers():
         return
     
     for i, label_file in enumerate(label_files):
-        print(f'LABEL FILE: {label_file} | {i+1} of {len(label_files)}')
+        # print(f'LABEL FILE: {label_file} | {i+1} of {len(label_files)}')
         # Create the label maker object
         try:
             qlr = brother_ql.BrotherQLRaster(model)
@@ -175,7 +176,9 @@ def generate_sticker_df(df):
         "Customer Name": ["Customer Name", "customer_name", "CustomerName"],
         "Meal Sticker (from Linked OrderItem)": ["Meal Sticker (from Linked OrderItem)", "meal_sticker", "MealSticker"],
         "Order Type (from Linked OrderItem)": ["Order Type (from Linked OrderItem)", "order_type", "OrderType"],
-        "Delivery Date": ["Delivery Date", "delivery_date", "DeliveryDate"]
+        "Delivery Date": ["Delivery Date", "delivery_date", "DeliveryDate"],
+        "Position Id": ["Position Id", "position_id", "PositionId"],
+        "Dish ID (from Linked OrderItem)": ["Dish ID (from Linked OrderItem)"]
     }
     
     # Try to find the correct column names
@@ -196,7 +199,7 @@ def generate_sticker_df(df):
         raise ValueError(f"Missing required columns: {missing_columns}. Available columns: {list(df.columns)}")
     
     # Select columns using the found column names
-    selected_columns = [found_columns[col] for col in ["#", "Customer Name", "Meal Sticker (from Linked OrderItem)", "Order Type (from Linked OrderItem)", "Delivery Date"]]
+    selected_columns = [found_columns[col] for col in ["#", "Customer Name", "Meal Sticker (from Linked OrderItem)", "Order Type (from Linked OrderItem)", "Delivery Date", "Position Id", "Dish ID (from Linked OrderItem)"]]
     df_dish = df[selected_columns].dropna()
     
     # Rename columns to expected names for consistency
@@ -266,6 +269,14 @@ def create_presentation_stickers(df):
     BARCODE_HEIGHT = 0.75
     margin = Inches(0.05)
 
+    
+    if 'Dish ID (from Linked OrderItem)' in df.columns and 'Position Id' in df.columns:
+        df['Dish ID (from Linked OrderItem)'] = df['Dish ID (from Linked OrderItem)'].apply(
+            lambda x: int(x[0]) if isinstance(x, list) and len(x) > 0 and str(x[0]).isdigit() 
+            else (int(x) if isinstance(x, (int, float)) else x)
+        )
+        df.sort_values(by=['Dish ID (from Linked OrderItem)', 'Position Id'], ascending=[True, True], inplace=True)
+
     # iterate each row in df_dish
     for _, row in df.iterrows():
         # add one page copied from template
@@ -304,7 +315,7 @@ def create_presentation_stickers(df):
 
 def read_client_serving():
     load_dotenv()
-    api_key = os.getenv("AIRTABLE_API_KEY")
+    api_key = st.secrets.get("AIRTABLE_API_KEY")
     
     if not api_key:
         raise AirTableError("Airtable API key not found. Please check your environment variables or secrets.")
