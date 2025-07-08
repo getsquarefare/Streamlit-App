@@ -52,7 +52,7 @@ class AirTable():
                 'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W',
                 'QUANTITY': 'fldvkwFMlBOW5um2y',
                 'SHIPPING_PHONE': 'fldMuPbe4DX0rmq5z',
-                'MEAL_TYPE': 'fldCsBzoy9rxKlWmN'
+                'MEAL_TYPE': 'fldE0fWRfUnoHznqC'
             }
         except Exception as e:
             logger.error(f"Error initializing AirTable: {str(e)}")

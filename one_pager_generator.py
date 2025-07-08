@@ -34,7 +34,7 @@ class AirTable():
             'CLIENT': 'fldjEgeRh2bGxajXT',            
             'DISH_STICKER': 'fldYZYDRjScz6ig5a',       
             'DELIVERY_DAY': 'flddRJziNBdEtrpmG', 
-            'PORTIONS': 'fldCsBzoy9rxKlWmN',
+            'PORTIONS': 'fldE0fWRfUnoHznqC',
             'SHIPPING_ADDRESS_1': 'flddnU6Y02iIHp16G',
             'SHIPPING_CITY': 'fldBIgt7ce5fEYLDG',
             'SHIPPING_PROVINCE': 'fldGeLuYoGKiw227Y',

@@ -175,7 +175,7 @@ def generate_sticker_df(df):
         "#": ["#", "ID", "id", "Record ID"],
         "Customer Name": ["Customer Name", "customer_name", "CustomerName"],
         "Meal Sticker (from Linked OrderItem)": ["Meal Sticker (from Linked OrderItem)", "meal_sticker", "MealSticker"],
-        "Order Type (from Linked OrderItem)": ["Order Type (from Linked OrderItem)", "order_type", "OrderType"],
+        "Meal Portion (from Linked OrderItem)": ["Meal Portion (from Linked OrderItem)", "meal_portion", "MealPortion"],
         "Delivery Date": ["Delivery Date", "delivery_date", "DeliveryDate"],
         "Position Id": ["Position Id", "position_id", "PositionId"],
         "Dish ID (from Linked OrderItem)": ["Dish ID (from Linked OrderItem)"]
@@ -199,7 +199,7 @@ def generate_sticker_df(df):
         raise ValueError(f"Missing required columns: {missing_columns}. Available columns: {list(df.columns)}")
     
     # Select columns using the found column names
-    selected_columns = [found_columns[col] for col in ["#", "Customer Name", "Meal Sticker (from Linked OrderItem)", "Order Type (from Linked OrderItem)", "Delivery Date", "Position Id", "Dish ID (from Linked OrderItem)"]]
+    selected_columns = [found_columns[col] for col in ["#", "Customer Name", "Meal Sticker (from Linked OrderItem)", "Meal Portion (from Linked OrderItem)", "Delivery Date", "Position Id", "Dish ID (from Linked OrderItem)"]]
     df_dish = df[selected_columns].dropna()
     
     # Rename columns to expected names for consistency
@@ -213,7 +213,7 @@ def generate_sticker_df(df):
     df_dish['client_name'] = df_dish['Customer Name'].apply(lambda x: x[0] if isinstance(x, list) else x)
 
     # breakfast, lunch, etc.
-    df_dish['meal'] = df_dish['Order Type (from Linked OrderItem)'].apply(lambda x: x[0] if isinstance(x, list) else x)
+    df_dish['meal'] = df_dish['Meal Portion (from Linked OrderItem)'].apply(lambda x: x[0] if isinstance(x, list) else x)
 
     def add_days(date_str, days = 3):  # by default: add 3 days based on EST
         date = datetime.now(est).strptime(date_str, "%Y-%m-%d")
