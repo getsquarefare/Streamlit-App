@@ -75,13 +75,6 @@ class AirTable():
             
             # Standardize column names
             df.columns = [col.replace('_', ' ').title() for col in df.columns]
-            
-            # Make sure 'Order Type' column exists
-            if 'Meal Type' in df.columns:
-                df.rename(columns={'Meal Type': 'Order Type'}, inplace=True)
-            
-            if 'Order Type' not in df.columns:
-                df['Order Type'] = 'Standard'  # Default value
                 
             return df
             
@@ -99,7 +92,7 @@ class AirTable():
             portion_per_sticker = 6.8
             
             # Check if required columns exist
-            required_cols = ['Quantity', 'Order Type', 'Shipping Phone', 'Shipping Province',
+            required_cols = ['Quantity', 'Meal Portion', 'Shipping Phone', 'Shipping Province',
                             'Shipping Name', 'Shipping Address 1',
                             'Shipping City', 'Shipping Postal Code']
             
@@ -110,8 +103,8 @@ class AirTable():
             
             # Process quantity based on order type
             df['Quantity'] = df.apply(
-                lambda row: 1 * 0.8 if row['Order Type'] == 'Breakfast' 
-                else (1 * 0.1 if row['Order Type'] == 'Snack' else 1), 
+                lambda row: 1 * 0.8 if row['Meal Portion'] == 'Breakfast' 
+                else (1 * 0.1 if row['Meal Portion'] == 'Snack' else 1), 
                 axis=1
             )
             
