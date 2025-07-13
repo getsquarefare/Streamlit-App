@@ -87,7 +87,7 @@ class AirTable():
         df_clients.columns = [col.strip() for col in df_clients.columns]
         
         # Process client servings data - keep only necessary columns
-        df_orders = df_orders[['Delivery Date', 'Meal Sticker', 'Order Type', 'To_Match_Client_Nutrition',
+        df_orders = df_orders[['Delivery Date', 'Meal Sticker', 'Meal Portion', 'To_Match_Client_Nutrition',
                             'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
                             'Shipping Province', 'Shipping Postal Code', 'Customer Name']].dropna(subset=['To_Match_Client_Nutrition'])
         
@@ -102,20 +102,20 @@ class AirTable():
         df_orders["Meal Sticker"] = df_orders.apply(
             lambda row: (row["Meal Sticker"][0] if isinstance(row["Meal Sticker"], list) and len(row["Meal Sticker"]) > 0 else 
                         (str(row["Meal Sticker"]) if not isinstance(row["Meal Sticker"], list) else "Unknown")) 
-                        + ' - ' + str(row.get("Order Type", "Unknown")),
+                        + ' - ' + str(row.get("Meal Portion", "Unknown")),
             axis=1
         )
         
         # For order type
-        df_orders["Order Type"] = df_orders["Order Type"].apply(
+        df_orders["Meal Portion"] = df_orders["Meal Portion"].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) > 0 else 
-                    (str(x) if not isinstance(x, list) else "Unknown")
+                    (str(x).replace(' Subscriptions', '') if not isinstance(x, list) else "Unknown")
         )
         
         # Determine portions based on order type
         df_orders['Portions'] = df_orders.apply(
-            lambda row: 0.5 if row['Order Type'] == 'Breakfast' 
-                    else (0.25 if row['Order Type'] == 'Snack' else 1),
+            lambda row: 0.5 if row['Meal Portion'] == 'Breakfast' 
+                    else (0.25 if row['Meal Portion'] == 'Snack' else 1),
             axis=1
         )
         
