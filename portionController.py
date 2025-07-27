@@ -424,7 +424,7 @@ class MealRecommendation:
                 shopify_id_column="#",
                 client_column="To_Match_Client_Nutrition",
                 dish_column="Dish ID",
-                ingredient_column="Final Ingredients",
+                ingredient_column="Ingredients To Recommend",
                 deletion_column="Deletions",
                 skip_portioning_column="Skip Portioning"
             )
@@ -479,7 +479,7 @@ class MealRecommendation:
             shopify_id_column="#",
             client_column="To_Match_Client_Nutrition",
             dish_column="Dish ID",
-            ingredient_column="Final Ingredients",
+            ingredient_column="Ingredients To Recommend",
             deletion_column="Deletions",
         )
     
@@ -493,7 +493,7 @@ class MealRecommendation:
         
         # Check if final_ingredients is None or empty
         if final_ingredients is None or len(final_ingredients) == 0:
-            raise PortioningError(f"Skipping order {shopify_id}: No final ingredients provided")
+            raise PortioningError(f"Skipping order {shopify_id}: No Ingredients To Recommend provided")
         
         client = self.db.get_client_details(recId=client_id)
         
