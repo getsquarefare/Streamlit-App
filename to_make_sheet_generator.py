@@ -80,7 +80,7 @@ class ToMakeSheetGenerator():
         try:
             # Field IDs for Ingredients table
             INGREDIENT_ID = 'flduR79GRxTbyfyKe'
-            RAW_COOKED_CONVERSION = 'fld8VHWjNgPuj5szl'
+            RAW_COOKED_CONVERSION = 'fld8VHWjNgPuj5szl' #Cooked/Raw Conversion
 
             formula = dict()
             formula[INGREDIENT_ID] = ingredient_name
@@ -89,8 +89,9 @@ class ToMakeSheetGenerator():
             records = self.ingredients_table.all(formula=formula)
             
             if records:
-                conversion_factor = records[0]['fields'].get(RAW_COOKED_CONVERSION, 1.0)
+                conversion_factor = records[0]['fields'].get("Cooked/Raw Conversion", 1.0)
                 result = float(conversion_factor) if conversion_factor else 1.0
+                
             else:
                 logger.warning(f"Ingredient '{ingredient_name}' not found in ingredients table")
                 result = 1.0
@@ -783,7 +784,7 @@ class ToMakeSheetGenerator():
             
             # Create Excel file
             excel_file = self.create_to_make_sheet_excel(ingredient_summary)
-            
+            print(f"cached ingredients: {self.conversion_cache}")
             return excel_file
             
         except Exception as e:
