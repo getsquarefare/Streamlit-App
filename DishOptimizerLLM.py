@@ -141,7 +141,7 @@ class LLMDishOptimizer:
         prompt = self.generate_prompt()
         
         # Get API key from Streamlit secrets
-        api_key = st.secrets["OPEN_AI_API_KEY"]
+        api_key = st.secrets["OPENAI_API_KEY"]
         client = OpenAI(api_key=api_key)
         
         # Define the OpenAI API call with the generated prompt

@@ -454,5 +454,47 @@ def main():
                 )
             
             st.success("One-Sheeter generated successfully!")
+
+    # to_make_sheet_generator
+    st.header('To-Make Sheet Generator 🍳')
+    with st.expander('Expand to see more details'):
+        st.markdown("⚠️ Source Table: [Clientservings > For To-Make Sheet](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viw4WN1XsjMnHwMkt?blocks=hide)")
+
+        # Generate button
+        to_make_sheet_generate_button = st.button("Generate To-Make Sheet")
+        
+        if to_make_sheet_generate_button:
+            try:
+                with st.spinner('Generating to-make sheet... It may take a few minutes 🕐'):
+                    # Import the generator
+                    from to_make_sheet_generator import new_to_make_generator
+                    
+                    # Create generator instance
+                    generator = new_to_make_generator()
+                    
+                    # Generate the to-make sheet
+                    excel_file = generator.generate_to_make_sheet()
+                    
+                    # Get current date for filename
+                    current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
+                    updated_xlsx_name = f'to_make_sheet_{current_date_time}.xlsx'
+                    
+                    # Provide download button
+                    st.download_button(
+                        label="Download To-Make Sheet",
+                        data=excel_file.getvalue(),
+                        file_name=updated_xlsx_name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                    
+                    st.success("To-Make Sheet generated successfully!")
+                    
+            except Exception as e:
+                st.error(f"Error generating to-make sheet: {str(e)}")
+                st.info("Please check the source table data and try again")
+                # Show technical details in an expander for debugging
+                with st.expander("Technical Error Details (for debugging)"):
+                    st.code(traceback.format_exc())
+
 if __name__ == "__main__":
     main()
