@@ -93,7 +93,7 @@ class AirTable():
         DELETIONS = 'fldwgVkboOme5380s'
         QUANTITY = 'fldvkwFMlBOW5um2y'
         SELECTED_PROTEIN = 'fldL1BpT5B6dPdh32'
-        FINAL_INGREDIENTS = 'fldUaOeaIzQQ8091p'
+        FINAL_INGREDIENTS = 'fldZhqltOLU0tiEWI'
         TO_MATCH_CLIENT_NUTRITION = 'fldjEgeRh2bGxajXT'
         DISH_ID = 'fldLOvWuvg6X9Odvw'
         PORITON_RESULT = 'fldadHgYOukaCrC6v',
