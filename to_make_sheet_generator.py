@@ -277,13 +277,15 @@ class ToMakeSheetGenerator():
                 
                 # Track ingredients that come from snacks
                 if is_snack:
-                    snack_ingredients.add(clean_ingredient_name)
+                    continue
                 
+
                 # Determine component type based on mapping
                 component_type = component_mapping.get(clean_ingredient_name)
                 
                 # Debug: Log component mapping results
-                # logger.info(f"Processing ingredient: '{clean_ingredient_name}' -> component: '{component_type}', grams: {grams}")
+                # if clean_ingredient_name == 'Carrot':
+                #     logger.info(f"Processing ingredient: '{clean_ingredient_name}' -> component: '{component_type}', grams: {grams}")
                 
                 if not component_type:
                     logger.warning(f"Could not determine component type for ingredient: '{clean_ingredient_name}'")
@@ -302,15 +304,8 @@ class ToMakeSheetGenerator():
                 
                 total_grams += final_grams
                 
-                if is_snack:
-                    # For snacks, we'll handle them separately
-                    continue
-                
                 # Special handling for meat - exclude snack meats and group by meal type
                 if component_type == 'Meat':
-                    # Skip meat ingredients from snacks or ingredients that appear in snacks
-                    if is_snack or clean_ingredient_name in snack_ingredients:
-                        continue
                     
                     # Determine if this is breakfast meat
                     is_breakfast = self.is_breakfast_meat(meal_type)
@@ -337,7 +332,7 @@ class ToMakeSheetGenerator():
                     # Handle all other ingredient types without grouping
                     else:
                         # Skip ingredients from snacks for components other than garnish and sauce
-                        if component_type not in ['Garnish', 'Sauce'] and (is_snack or clean_ingredient_name in snack_ingredients):
+                        if component_type not in ['Garnish', 'Sauce'] and is_snack:
                             continue
                             
                         if clean_ingredient_name not in ingredient_summary[component_type]:
@@ -346,7 +341,7 @@ class ToMakeSheetGenerator():
                             }
                         
                         ingredient_summary[component_type][clean_ingredient_name]['total_grams'] += final_grams
-            
+                            
             # Handle garnish combinations
             if garnish_names and any(name.strip() for name in garnish_names):
                 if dish_name not in garnish_combinations:
