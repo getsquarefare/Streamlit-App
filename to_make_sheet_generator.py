@@ -277,9 +277,11 @@ class ToMakeSheetGenerator():
                 
                 # Track ingredients that come from snacks
                 if is_snack:
+                    if dish_name not in snack_dishes:
+                        snack_dishes[dish_name] = 0
+                    snack_dishes[dish_name] += grams
                     continue
                 
-
                 # Determine component type based on mapping
                 component_type = component_mapping.get(clean_ingredient_name)
                 
@@ -356,11 +358,7 @@ class ToMakeSheetGenerator():
                 garnish_combinations[dish_name]['meal_count'] += 1
            
             
-            # Handle snacks
-            if is_snack:
-                if dish_name not in snack_dishes:
-                    snack_dishes[dish_name] = 0
-                snack_dishes[dish_name] += total_grams
+            
         
         # Add garnish combinations to the summary
         ingredient_summary['Garnish'] = {
@@ -474,7 +472,7 @@ class ToMakeSheetGenerator():
                 ingredients = ingredient_summary[component_type]
                 
                 # Column headers for this component
-                headers = ['Ingredient', 'Preparation', 'Uncooked (g)'] if component_type != 'Garnish' else ['Garnishes', '# of Meals']
+                headers = ['Ingredient', 'Preparation', 'Uncooked (g)','uncooked (lbs)'] if component_type != 'Garnish' else ['Garnishes', '# of Meals']
                 for col, header in enumerate(headers, 1):
                     cell = ws.cell(row=left_row, column=col)
                     if col == 1:  # First column (Ingredient)
@@ -513,6 +511,7 @@ class ToMakeSheetGenerator():
                         # Ingredient row
                         ws.cell(row=left_row, column=1, value=item_name).font = ingredient_font
                         ws.cell(row=left_row, column=3, value=round(data['total_grams'], 1)).font = ingredient_font
+                        ws.cell(row=left_row, column=4, value=round(data['total_grams']/453.592, 2)).font = ingredient_font
                         
                         # Apply borders to all cells in the row
                         for col in range(1, len(headers) + 1):
@@ -524,7 +523,7 @@ class ToMakeSheetGenerator():
                 # Add spacing between components
                 left_row += 1
             
-            right_section_starting_column = 5
+            right_section_starting_column = 6
             # Process right column sections
             for component_type in right_sections:
                 if component_type == 'Meat':
@@ -536,7 +535,7 @@ class ToMakeSheetGenerator():
                         continue
                     
                     # Main Meat header
-                    headers = ['Ingredient', 'Preparation', 'Uncooked (g)']
+                    headers = ['Ingredient', 'Preparation', 'Uncooked (g)','uncooked (lbs)']
                     
                     for col, header in enumerate(headers, 1):
                         cell = ws.cell(row=right_row, column=right_section_starting_column + col - 1)
@@ -566,6 +565,7 @@ class ToMakeSheetGenerator():
                         for item_name, data in sorted_breakfast:
                             ws.cell(row=right_row, column=right_section_starting_column, value=item_name).font = ingredient_font
                             ws.cell(row=right_row, column=right_section_starting_column + 2, value=round(data['total_grams'], 1)).font = ingredient_font
+                            ws.cell(row=right_row, column=right_section_starting_column + 3, value=round(data['total_grams']/453.592, 2)).font = ingredient_font
                             
                             for col in range(right_section_starting_column, right_section_starting_column + len(headers)):
                                 ws.cell(row=right_row, column=col).border = thin_border
@@ -589,6 +589,7 @@ class ToMakeSheetGenerator():
                         for item_name, data in sorted_lunch_dinner:
                             ws.cell(row=right_row, column=right_section_starting_column, value=item_name).font = ingredient_font
                             ws.cell(row=right_row, column=right_section_starting_column + 2, value=round(data['total_grams'], 1)).font = ingredient_font
+                            ws.cell(row=right_row, column=right_section_starting_column + 3, value=round(data['total_grams']/453.592, 2)).font = ingredient_font
                             
                             for col in range(right_section_starting_column, right_section_starting_column + len(headers)):
                                 ws.cell(row=right_row, column=col).border = thin_border
@@ -604,7 +605,7 @@ class ToMakeSheetGenerator():
                     ingredients = ingredient_summary[component_type]
                     
                     # Column headers for this component
-                    headers = ['Ingredient', 'Preparation', 'Uncooked (g)']
+                    headers = ['Ingredient', 'Preparation', 'Uncooked (g)','uncooked (lbs)']
                     
                     for col, header in enumerate(headers, 1):
                         cell = ws.cell(row=right_row, column=col + right_section_starting_column - 1)  # Start from column G (7)
@@ -626,7 +627,7 @@ class ToMakeSheetGenerator():
                         # Ingredient row
                         ws.cell(row=right_row, column=right_section_starting_column, value=item_name).font = ingredient_font
                         ws.cell(row=right_row, column=right_section_starting_column + 2, value=round(data['total_grams'], 1)).font = ingredient_font
-                        
+                        ws.cell(row=right_row, column=right_section_starting_column + 3, value=round(data['total_grams']/453.592, 2)).font = ingredient_font
                         # Apply borders to all cells in the row
                         for col in range(right_section_starting_column, right_section_starting_column + len(headers)):
                             ws.cell(row=right_row, column=col).border = thin_border
@@ -674,7 +675,7 @@ class ToMakeSheetGenerator():
             
             # Process Snack section (starting at the same row as Sauce)
             if 'Snack' in ingredient_summary and ingredient_summary['Snack']:
-                snack_headers = ['Snack', 'Total Grams (g)']
+                snack_headers = ['Snack', 'Total Grams (g)','Total Grams (lbs)']
                 start_col = right_section_starting_column + 3 
                 
                 for col, header in enumerate(snack_headers, 1):
@@ -699,7 +700,8 @@ class ToMakeSheetGenerator():
                            column=start_col, value=item_name).font = ingredient_font
                     ws.cell(row=bottom_row - len(ingredient_summary['Sauce'].items()) + 1 if 'Sauce' in ingredient_summary else bottom_row + 1, 
                            column=start_col + 1, value=round(data['total_grams'], 1)).font = ingredient_font
-                    
+                    ws.cell(row=bottom_row - len(ingredient_summary['Sauce'].items()) + 1 if 'Sauce' in ingredient_summary else bottom_row + 1, 
+                           column=start_col + 2, value=round(data['total_grams']/453.592, 2)).font = ingredient_font
                     # Apply borders to all cells in the row
                     for col in range(start_col, start_col + len(snack_headers)):
                         ws.cell(row=bottom_row - len(ingredient_summary['Sauce'].items()) + 1 if 'Sauce' in ingredient_summary else bottom_row + 1, 
