@@ -3,7 +3,7 @@ import os
 import json
 import glob
 from datetime import datetime, timedelta
-
+import time
 # Third-party imports
 import barcode
 from barcode.writer import ImageWriter
@@ -68,6 +68,34 @@ def resize_image(image_path, target_width, target_height):
     except Exception as e:
         print(f"Error resizing {image_path}: {str(e)}")
 
+def ensure_file_saved(file_path, max_retries=5, delay=0.1):
+    """
+    Ensure a file is completely saved before proceeding.
+    
+    Args:
+        file_path (str): Path to the file to check
+        max_retries (int): Maximum number of retry attempts
+        delay (float): Delay between retries in seconds
+    
+    Returns:
+        bool: True if file is saved and accessible, False otherwise
+    """
+    file_path = file_path
+    for attempt in range(max_retries):
+        try:
+            # Check if file exists and is readable
+            if os.path.exists(file_path) and os.access(file_path, os.R_OK):
+                # Try to open the file to ensure it's not locked
+                with open(file_path, 'rb') as f:
+                    f.read(1)  # Try to read at least 1 byte
+                return True
+        except (OSError, IOError):
+            pass
+        
+        time.sleep(delay)
+    
+    return False
+    
 def sort_key(filename):
     """
     Extract the numeric part from the filename for sorting.
@@ -294,23 +322,40 @@ def create_presentation_stickers(df):
                     break
 
         # ITF barcode generator, with transparent background
+        fileName = f'id_barcode_{row["#"]}'
         itf = ITF(row["#"], writer = ImageWriter(mode = "RGBA")) 
-        itf.save("id_barcode", dict(quiet_zone=3, background = (255, 255, 255, 0), 
+        itf.save(fileName, dict(quiet_zone=3, background = (255, 255, 255, 0), 
                                     font_size = 5, text_distance = 2.5,
                                     module_width = 0.3))
         
-        id_barcode = Image.open("id_barcode.png")
+        # Ensure file is saved before proceeding
+        if not ensure_file_saved(fileName + '.png'):
+            raise PPTGenerationError(f"Failed to save barcode file: {fileName}")
+        
+        id_barcode = Image.open(fileName + '.png')
         barcode_size = ((Inches(id_barcode.size[0] /id_barcode.size[1] * BARCODE_HEIGHT)), Inches(BARCODE_HEIGHT))
 
-        new_slide.shapes.add_picture('id_barcode.png', prs.slide_width - margin - barcode_size[0],
+        new_slide.shapes.add_picture(fileName + '.png', prs.slide_width - margin - barcode_size[0],
                                         prs.slide_height - margin - barcode_size[1],
                                         width = barcode_size[0], height = barcode_size[1])
-
+        # delete the file
+        os.remove(fileName + '.png')
+        
         # add background
         new_slide = insert_background(new_slide, 'template/Dish_Sticker_Template_Barcode.png', prs)
+    
+    # Save the final presentation with verification
     current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
     updated_ppt_name = f'{current_date_time}_dish_sticker_barcode.pptx'
-    prs.save(updated_ppt_name)
+    
+    try:
+        prs.save(updated_ppt_name)
+        # Verify the file was saved successfully
+        if not ensure_file_saved(updated_ppt_name):
+            raise PPTGenerationError(f"Failed to save presentation: {updated_ppt_name}")
+        print(f"Successfully saved presentation: {updated_ppt_name}")
+    except Exception as e:
+        raise PPTGenerationError(f"Error saving presentation: {str(e)}")
 
 
 def read_client_serving():
