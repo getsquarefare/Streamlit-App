@@ -85,11 +85,17 @@ class AirTable():
         # Clean column names and values
         df_orders.columns = [col.strip() for col in df_orders.columns]
         df_clients.columns = [col.strip() for col in df_clients.columns]
-        
-        # Process client servings data - keep only necessary columns
-        df_orders = df_orders[['Delivery Date', 'Meal Sticker', 'Meal Portion', 'To_Match_Client_Nutrition',
-                            'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
-                            'Shipping Province', 'Shipping Postal Code', 'Customer Name']].dropna(subset=['To_Match_Client_Nutrition'])
+        required_cols = [
+            'Delivery Date', 'Meal Sticker', 'Meal Portion', 'To_Match_Client_Nutrition',
+            'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
+            'Shipping Province', 'Shipping Postal Code', 'Customer Name'
+        ]
+
+        # Ensure all required columns exist (missing ones will be created and filled with "")
+        df_orders = df_orders.reindex(columns=required_cols, fill_value="")
+
+        # Drop rows where 'To_Match_Client_Nutrition' is missing/blank
+        df_orders = df_orders[df_orders['To_Match_Client_Nutrition'] != ""]
         
         # Convert any list values to strings in all relevant columns
         # For client identifier
