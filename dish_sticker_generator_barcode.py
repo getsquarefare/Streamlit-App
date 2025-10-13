@@ -206,7 +206,8 @@ def generate_sticker_df(df):
         "Meal Portion (from Linked OrderItem)": ["Meal Portion (from Linked OrderItem)", "meal_portion", "MealPortion"],
         "Delivery Date": ["Delivery Date", "delivery_date", "DeliveryDate"],
         "Position Id": ["Position Id", "position_id", "PositionId"],
-        "Dish ID (from Linked OrderItem)": ["Dish ID (from Linked OrderItem)"]
+        "Dish ID (from Linked OrderItem)": ["Dish ID (from Linked OrderItem)"],
+        "Delivery Zone (from Linked OrderItem)": ["Delivery Zone (from Linked OrderItem)"]
     }
     
     # Try to find the correct column names
@@ -227,8 +228,8 @@ def generate_sticker_df(df):
         raise ValueError(f"Missing required columns: {missing_columns}. Available columns: {list(df.columns)}")
     
     # Select columns using the found column names
-    selected_columns = [found_columns[col] for col in ["#", "Customer Name", "Meal Sticker (from Linked OrderItem)", "Meal Portion (from Linked OrderItem)", "Delivery Date", "Position Id", "Dish ID (from Linked OrderItem)"]]
-    df_dish = df[selected_columns].dropna()
+    # selected_columns = [found_columns[col] for col in ["#", "Customer Name", "Meal Sticker (from Linked OrderItem)", "Meal Portion (from Linked OrderItem)", "Delivery Date", "Position Id", "Dish ID (from Linked OrderItem)","Delivery Zone (from Linked OrderItem)"]]
+    df_dish = df.fillna('N/A')
     
     # Rename columns to expected names for consistency
     df_dish = df_dish.rename(columns={found_columns[col]: col for col in found_columns})
@@ -242,6 +243,9 @@ def generate_sticker_df(df):
 
     # breakfast, lunch, etc.
     df_dish['meal'] = df_dish['Meal Portion (from Linked OrderItem)'].apply(lambda x: x[0] if isinstance(x, list) else x)
+
+    # zone
+    df_dish['zone'] = df_dish['Delivery Zone (from Linked OrderItem)'].apply(lambda x: 'Zone ' + str(x[0]) if isinstance(x, list) else 'Zone ' + str(x))
 
     def add_days(date_str, days = 3):  # by default: add 3 days based on EST
         date = datetime.now(est).strptime(date_str, "%Y-%m-%d")
@@ -310,16 +314,12 @@ def create_presentation_stickers(df):
         # add one page copied from template
         new_slide = copy_slide(slide, prs)
 
-        # change the content of the text boxes
-        for i, shape in enumerate(new_slide.shapes): 
-            # Get the text frame
+        for shape in new_slide.shapes:
             if shape.has_text_frame:
+                key = shape.name 
                 text_frame = shape.text_frame
-                for paragraph in text_frame.paragraphs:
-                    for run in paragraph.runs:
-                        print(row[run.text])
-                        run.text = row[run.text]
-                    break
+                if text_frame.paragraphs and text_frame.paragraphs[0].runs:
+                    text_frame.paragraphs[0].runs[0].text = row[key]
 
         # ITF barcode generator, with transparent background
         fileName = f'id_barcode_{row["#"]}'
@@ -342,7 +342,7 @@ def create_presentation_stickers(df):
         os.remove(fileName + '.png')
         
         # add background
-        new_slide = insert_background(new_slide, 'template/Dish_Sticker_Template_Barcode.png', prs)
+        # new_slide = insert_background(new_slide, 'template/Dish_Sticker_Template_Barcode.png', prs)
     
     # Save the final presentation with verification
     current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")

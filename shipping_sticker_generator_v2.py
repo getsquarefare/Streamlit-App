@@ -52,7 +52,8 @@ class AirTable():
                 'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W',
                 'QUANTITY': 'fldvkwFMlBOW5um2y',
                 'SHIPPING_PHONE': 'fldMuPbe4DX0rmq5z',
-                'MEAL_TYPE': 'fldE0fWRfUnoHznqC'
+                'MEAL_TYPE': 'fldE0fWRfUnoHznqC',
+                'ZONE_NUMBER': 'fldbL18Ixas6ong0j'
             }
         except Exception as e:
             logger.error(f"Error initializing AirTable: {str(e)}")
@@ -94,8 +95,7 @@ class AirTable():
             # Check if required columns exist
             required_cols = ['Quantity', 'Meal Portion', 'Shipping Phone', 'Shipping Province',
                             'Shipping Name', 'Shipping Address 1',
-                            'Shipping City', 'Shipping Postal Code']
-            
+                            'Shipping City', 'Shipping Postal Code','Zone Number (From Delivery Zone)']
             missing_cols = [col for col in required_cols if col not in df.columns]
             if missing_cols:
                 logger.error(f"Missing columns in data: {missing_cols}")
@@ -112,6 +112,11 @@ class AirTable():
             df['Shipping Phone'] = (df['Shipping Phone'].astype(str).fillna('')
                     .str.replace(r'\D', '', regex=True)  # Remove non-digits
                     .str.replace(r'(\d{3})(\d{3})(\d{4})', r'\1-\2-\3', regex=True))
+
+            # Extract zone number from list (Airtable returns lists for lookup fields)
+            df['Zone Number (From Delivery Zone)'] = df['Zone Number (From Delivery Zone)'].apply(
+                lambda x: str(x[0]) if isinstance(x, list) and len(x) > 0 else 'N/A'
+            )
                     
             # Standardize province format
             df['Shipping Province'] = df['Shipping Province'].str.upper()
@@ -127,7 +132,8 @@ class AirTable():
                 'Shipping City',
                 'Shipping Province',
                 'Shipping Postal Code',
-                'Shipping Phone'
+                'Shipping Phone',
+                'Zone Number (From Delivery Zone)'
             ])['Quantity'].sum().reset_index()
 
             # Calculate number of stickers needed
@@ -185,24 +191,28 @@ def generate_ppt(df, prs):
                         if 'Shipping Name' in paragraph.text:
                             paragraph.text = row['Shipping Name']
                             paragraph.font.size = Pt(28)
-                            paragraph.font.name = "Calibri"
+                            paragraph.font.name = "Lato"
                         elif "Address" in paragraph.text:
                             if row['Shipping Address 2'] != '':
                                 paragraph.text = f"{row['Shipping Address 1']}, {row['Shipping Address 2']}"
                                 paragraph.font.size = Pt(24)
-                                paragraph.font.name = "Calibri"
+                                paragraph.font.name = "Lato"
                             else:
                                 paragraph.text = f"{row['Shipping Address 1']}"
                                 paragraph.font.size = Pt(24)
-                                paragraph.font.name = "Calibri"
+                                paragraph.font.name = "Lato"
                         elif "City" in paragraph.text:
                             paragraph.text = f"{row['Shipping City']}, {row['Shipping Province']} {row['Shipping Postal Code']}"
                             paragraph.font.size = Pt(24)
-                            paragraph.font.name = "Calibri"
+                            paragraph.font.name = "Lato"
                         elif 'Shipping Phone' in paragraph.text:
                             paragraph.text = str(row['Shipping Phone'])
                             paragraph.font.size = Pt(24)
-                            paragraph.font.name = "Calibri"
+                            paragraph.font.name = "Lato"
+                        elif 'ZONE' in paragraph.text:
+                            paragraph.text = 'ZONE ' + str(row['Zone Number (From Delivery Zone)'])
+                            paragraph.font.size = Pt(28)
+                            paragraph.font.name = "Lato"
                             
             if sticker_needed > 1:
                 count = 1
