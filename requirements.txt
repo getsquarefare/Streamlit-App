@@ -1,24 +1,24 @@
 # Core data processing
-numpy>=1.20.0,<2.0.0
-pandas>=1.5.0,<3.0.0
-pyarrow==14.0.2
+numpy
+pandas
+pyarrow
 # Web framework and UI
-streamlit>=1.28.0,<2.0.0
+streamlit
 
 # File processing
-openpyxl==3.1.2
-python-pptx>=0.6.21,<1.0.0
+openpyxl
+python-pptx
 
 # API and external services
-openai==1.12.0
-pyairtable>=2.0.0,<3.0.0
-requests==2.31.0
+openai
+pyairtable
+requests
 
 # Printing
-brother_ql>=0.9.0,<1.0.0
+brother_ql
 
 # Utilities
-pillow>=9.0.0,<11.0.0
-python-barcode>=0.15.0,<1.0.0
-python-dotenv==1.0.1
-tqdm==4.66.1
+pillow
+python-barcode
+python-dotenv
+tqdm
