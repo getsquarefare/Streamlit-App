@@ -762,6 +762,7 @@ def create_to_make_sheet_excel(ingredient_summary):
                         ws.cell(row=right_row, column=col).alignment = Alignment(wrap_text=True, vertical='top')
 
                     right_row += 1
+                right_row += 1
 
         # Process bottom sections (Sauce and Snack)
         bottom_row = right_row + 1
