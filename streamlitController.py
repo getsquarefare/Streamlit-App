@@ -19,6 +19,7 @@ from dish_sticker_generator_barcode import *
 from one_pager_generator import *
 from store_access import new_database_access
 from clientservings_excel_output import *
+from to_make_sheet_generator import *
 
 # Streamlit app
 def main():
@@ -27,6 +28,7 @@ def main():
     st.title('Square Fare Toolkits 🧰')
     # Set the time zone to Eastern Standard Time (EST)
     est = pytz.timezone('US/Eastern')
+    current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
    
     # portion algo trigger
     st.divider()
@@ -64,8 +66,7 @@ def main():
         if clientservings_generate_button:
             try:
                 with st.spinner('Generating clientservings... It may take a few minutes 🕐'):
-                    # Get the current date in EST
-                    current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
+                   
                     updated_xlsx_name = f'{current_date_time}_clientservings.xlsx'
 
                     airTable = new_database_access() 
@@ -288,7 +289,6 @@ def main():
                         st.stop()
                     
                     # Save the file with error handling
-                    current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
                     updated_ppt_name = f'{current_date_time}_dish_sticker.pptx'
                     try:
                         prs.save(updated_ppt_name)
@@ -378,8 +378,6 @@ def main():
                     
                     create_presentation_stickers(df_dish)
                     
-                    # Get the generated file name
-                    current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
                     qr_updated_ppt_name = f'{current_date_time}_dish_sticker_barcode.pptx'
                     
                     # Check if file was created successfully
@@ -435,9 +433,7 @@ def main():
                 # Generate one pagers (no background parameter)
                 prs = generate_one_pagers(prs_file)
                 
-                # Save the result
-                current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
-                updated_ppt_name = f'{current_date_time}__one_sheeter.pptx'
+                updated_ppt_name = f'{current_date_time}_one_sheeter.pptx'
                 prs.save(updated_ppt_name)
                 
                 # Clean up temporary files
@@ -467,17 +463,10 @@ def main():
             try:
                 with st.spinner('Generating to-make sheet... It may take a few minutes 🕐'):
                     # Import the generator
-                    from to_make_sheet_generator import new_to_make_generator
-                    
-                    # Create generator instance
-                    generator = new_to_make_generator()
-                    
-                    # Generate the to-make sheet
-                    excel_file = generator.generate_to_make_sheet()
-                    
-                    # Get current date for filename
-                    current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
-                    updated_xlsx_name = f'to_make_sheet_{current_date_time}.xlsx'
+    
+                    excel_file = generate_to_make_sheet()
+
+                    updated_xlsx_name = f'{current_date_time}_to_make_sheet.xlsx'
                     
                     # Provide download button
                     st.download_button(

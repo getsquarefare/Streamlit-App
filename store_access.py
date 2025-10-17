@@ -4,12 +4,13 @@ import os
 from dotenv import load_dotenv
 from functools import cache
 import streamlit as st
-from exceptions import AirtableDataError  # Import from new exceptions file
+from exceptions import AirTableError, AirtableDataError  # Import from new exceptions file
 
 class AirTable():
     def __init__(self, ex_api_key=None):
         # Load environment variables from the .env file
         load_dotenv()
+        self.conversion_cache = {}
         
         # Get the API key from environment variables or the passed argument
         self.api_key = ex_api_key or st.secrets["AIRTABLE_API_KEY"]
@@ -370,6 +371,70 @@ class AirTable():
         subscription_details = self.subscription_table.all(formula=formula)
         return subscription_details
 
+    def get_clientservings_data(self):
+        """Get all client servings data with Modified Recipe Details and component columns"""
+        # Field IDs for ClientServings table
+        CUSTOMER_NAME = 'fldDs6QXE6uYKIlRk'
+        DELIVERY_DATE = 'fld6YLCoS7XCFK04G'
+        DISH = 'fldmqHv4aXJxuJ8E2'
+        MODIFIED_RECIPE_DETAILS = 'fld7dTxR7ImOtzO4k'
+        STARCH = 'fldZKmvAeBTY9tRkR'  # Starch ingredients
+        PROTEIN = 'fldksE3QaxIIHzAIi'  # Protein/Meat ingredients  
+        SAUCE = 'fldOb13TV0bymcyF6'  # Sauce ingredients
+        GARNISH = 'fldgrNa89SJKSPtwY'  # Garnish ingredients
+        VEGGIE = 'fldHaAZr6fiWZbNaf'  # Veggie ingredients
+        MEAL = 'fld00H3SpKNqTbhC0'
+        MEAL_FROM_CLIENT = "fld00H3SpKNqTbhC0"
+        
+        fields_to_return = [
+            CUSTOMER_NAME, DELIVERY_DATE, DISH,
+            MODIFIED_RECIPE_DETAILS,
+            STARCH, PROTEIN, SAUCE, GARNISH, VEGGIE, MEAL, MEAL_FROM_CLIENT
+        ]
+        
+        try:
+            # Get all client servings from the view
+            # Note: Modified Recipe Details will be included by default since we're not using field filtering
+            records = self.clientserving_table.all(view='viw4WN1XsjMnHwMkt',fields=fields_to_return)
+           
+            return records
+        except Exception as e:
+            raise AirTableError(f"Failed to get client servings data: {str(e)}")
+
+    def get_ingredient_conversion_factor(self, ingredient_name):
+        """Get the raw/cooked conversion factor for an ingredient by name with caching"""
+        # Check cache first
+        if ingredient_name in self.conversion_cache:
+            return self.conversion_cache[ingredient_name]
+            
+        try:
+            # Field IDs for Ingredients table
+            INGREDIENT_ID = 'flduR79GRxTbyfyKe'
+            RAW_COOKED_CONVERSION = 'fld8VHWjNgPuj5szl' #Cooked/Raw Conversion
+
+            formula = dict()
+            formula[INGREDIENT_ID] = ingredient_name
+            formula = match(formula)
+            # Search for ingredient by name
+            records = self.ingredients_table.all(formula=formula)
+            
+            if records:
+                conversion_factor = records[0]['fields'].get("Cooked/Raw Conversion", 1.0)
+                result = float(conversion_factor) if conversion_factor else 1.0
+                
+            else:
+                result = 1.0
+                raise AirtableDataError(f"Ingredient '{ingredient_name}' not found in ingredients table")
+            
+            # Cache the result
+            self.conversion_cache[ingredient_name] = result
+            return result
+                
+        except Exception as e:
+             # Cache the default value
+            self.conversion_cache[ingredient_name] = 1.0
+            raise AirTableError(f"Error getting conversion factor for '{ingredient_name}': {str(e)}")
+           
 
 def new_database_access():
     return AirTable()
