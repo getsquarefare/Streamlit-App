@@ -23,6 +23,7 @@ from to_make_sheet_generator import *
 
 # Streamlit app
 def main():
+    db = new_database_access()
     # Current date for filename
     
     st.title('Square Fare Toolkits 🧰')
@@ -464,7 +465,7 @@ def main():
                 with st.spinner('Generating to-make sheet... It may take a few minutes 🕐'):
                     # Import the generator
     
-                    excel_file = generate_to_make_sheet()
+                    excel_file = generate_to_make_sheet(db)
 
                     updated_xlsx_name = f'{current_date_time}_to_make_sheet.xlsx'
                     
