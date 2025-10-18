@@ -68,18 +68,14 @@ def main():
         if clientservings_generate_button:
             try:
                 with st.spinner('Generating clientservings... It may take a few minutes 🕐'):
-                   
-                    updated_xlsx_name = f'{current_date_time}_clientservings.xlsx'
-
-                    airTable = new_database_access() 
-                    all_output = airTable.consolidated_all_dishes_output()
-                    excel_data = airTable.generate_clientservings_excel(all_output)
+                    clientservings_excel_name = f'{current_date_time}_clientservings.xlsx'
+                    excel_data = generate_clientservings_excel(db)
 
                 # Allow the user to download the file
                 st.download_button(
                     label="Download ClientServings Excel",
                     data=excel_data,
-                    file_name=updated_xlsx_name,
+                    file_name=clientservings_excel_name,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
                 

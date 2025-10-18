@@ -422,7 +422,103 @@ class AirTable():
              # Cache the default value
             self.conversion_cache[ingredient_name] = 1.0
             raise AirTableError(f"Error getting conversion factor for '{ingredient_name}': {str(e)}")
-           
+
+    def get_clientservings_one_dish(self, dish_id):
+        """Get all client servings for a specific dish"""
+        # Field IDs - keeping original names as requested
+        CUSTOMER_NAME = 'fldDs6QXE6uYKIlRk'
+        MEAT = 'fldksE3QaxIIHzAIi'
+        DELIVERY_DATE = 'fld6YLCoS7XCFK04G'
+        DISH = 'fldmqHv4aXJxuJ8E2'
+        QUANTITY = 'fldfwdu2UKbcTve4a'
+        ALL_DELETIONS = 'fldzkTaNYfIBKxF11'
+        SAUCE = 'fldOb13TV0bymcyF6'
+        STARCH = 'fldZKmvAeBTY9tRkR'
+        VEGGIES_G = 'fldnPpqigL4HmN4jV'
+        GARNISH_G = 'fldpzKEyEiFA5vKIw'
+        LINKED_ORDERITEM = 'fld6tE8nDjVxSyEtb'
+        MEAT_G = 'fld4V0qMFWsCJ6VU7'
+        SAUCE_G = 'fldiudWDCfVwDGfrK'
+        STARCH_G = 'fldoyv8xZjZwQ9Loh'
+        VEGGIES = 'fldHaAZr6fiWZbNaf'
+        GARNISH = 'fldgrNa89SJKSPtwY'
+        REVIEW_NEEDED = 'fldzf5wNyvEvNQZ6N'
+        NUTRITION_NOTES_FROM_LINKED_ORDERITEM = 'fldq6CuqwGFg1v98H'
+        EXPLANATION = 'fldaugEJU01LZhlX7'
+        LAST_MODIFIED = 'fldV6RFrEYC7YrJT6'
+        UPDATED_NUTRITION_INFO = 'fldqV6jLeYa57gWly'
+        MEAL_PORTION_FROM_LINKED_ORDERITEM = 'fld00H3SpKNqTbhC0'
+        MEAL_STICKER = 'fldeUJtuijUAbklCQ'
+        DISH_ID = 'fldhrw7U0pV4D9Cad'
+        POSITION_ID = 'fldRWwXRTzUflOPgk'
+        NEW_INGREDIENTS = 'fldGJYhPkoWXgCw6W'
+        INGREDIENTS_TO_RECOMMEND = 'fldyxhwB2XWzXi43r'
+        FINAL_INGREDIENTS_WITH_USER_EDITS = 'fldngsHO3R0KIVEXa'
+        
+        fields_to_return = [CUSTOMER_NAME, MEAT, DELIVERY_DATE, DISH, QUANTITY, ALL_DELETIONS, SAUCE,
+                           STARCH, VEGGIES_G, GARNISH_G, LINKED_ORDERITEM, MEAT_G, SAUCE_G, STARCH_G, 
+                           VEGGIES, GARNISH, NUTRITION_NOTES_FROM_LINKED_ORDERITEM, 
+                           MEAL_PORTION_FROM_LINKED_ORDERITEM, MEAL_STICKER, DISH_ID, POSITION_ID, NEW_INGREDIENTS, INGREDIENTS_TO_RECOMMEND, FINAL_INGREDIENTS_WITH_USER_EDITS]
+        
+        try:
+            filter_fields = {DISH_ID: dish_id}
+            formula = match(filter_fields)
+            return self.clientserving_table.all(formula=formula, fields=fields_to_return,view='viwgt50kLisz8jx7b')
+        except Exception as e:
+            logger.error(f"Failed to get client servings for dish ID {dish_id}: {str(e)}")
+            raise AirTableError(f"Failed to get client servings for dish ID {dish_id}: {str(e)}")
+
+    def get_dish_squarespace_name(self, dish_id):
+        """Get default ingredients for a specific dish"""
+        try:
+            DISH_ID = 'fldQbBplmx4oOHhR4'
+            filter_fields = {DISH_ID: dish_id}
+            formula = match(filter_fields)
+            
+            dish_ingredients_records = self.dishes_table.all(formula=formula)
+            name = ''
+            
+            for dish_ingredient in dish_ingredients_records:
+                tmp_name = dish_ingredient['fields'].get('SquareSpace Product Name', None)
+                if tmp_name:
+                    name = tmp_name
+            return name
+        except Exception as e:
+            logger.error(f"Failed to get SquareSpace Product Name for dish ID {dish_id}: {str(e)}")
+            raise AirTableError(f"Failed to get SquareSpace Product Name for dish ID {dish_id}: {str(e)}")
+
+    def get_dish_default_ingredients(self, dish_id):
+            """Get default ingredients for a specific dish"""
+            try:
+                DISH_ID = 'fldQbBplmx4oOHhR4'
+                filter_fields = {DISH_ID: dish_id}
+                formula = match(filter_fields)
+                
+                dish_ingredients_records = self.dishes_table.all(formula=formula)
+                dish_all_ingredients = []
+                
+                for dish_ingredient in dish_ingredients_records:
+                    ingredients = dish_ingredient['fields'].get('Ingredient', [])
+                    if ingredients:
+                        dish_all_ingredients.append(ingredients[0])
+                        
+                return dish_all_ingredients
+            except Exception as e:
+                logger.error(f"Failed to get default ingredients for dish ID {dish_id}: {str(e)}")
+                raise AirTableError(f"Failed to get default ingredients for dish ID {dish_id}: {str(e)}")
+    def get_ingredient_details_by_rec_id(self, rec_id):
+        """Get ingredient details by record ID"""
+        fields_to_return = ['Ingredient Name', 'Component']
+        result = {}
+        
+        try:
+            ingredient = self.ingredients_table.get(rec_id)
+            for field in fields_to_return:
+                result[field] = ingredient['fields'][field]
+            return result
+        except Exception as e:
+            logger.warning(f"Ingredient not found with ID {rec_id}: {str(e)}")
+            return None
 
 def new_database_access():
     return AirTable()
