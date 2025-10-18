@@ -21,6 +21,7 @@ from store_access import new_database_access
 from clientservings_excel_output import *
 from to_make_sheet_generator import *
 
+DISH_STICKER_VIEW = 'viw5hROs9I9vV0YEq'
 # Streamlit app
 def main():
     db = new_database_access()
@@ -362,24 +363,14 @@ def main():
                         st.stop()
                     
                     # Generate Barcode stickers
-                    df = read_client_serving()
+                    df = db.get_clientservings_data(view=DISH_STICKER_VIEW)
                     if df is None:
                         st.error("Failed to fetch data from Airtable. Please check your connection.")
                         st.stop()
                     
-                    try:
-                        df_dish = generate_sticker_df(df)
-                    except ValueError as e:
-                        st.error(f"Column mapping error: {str(e)}")
-                        st.info("Please check the Airtable view structure and column names.")
-                        st.stop()
-                    except Exception as e:
-                        st.error(f"Error processing data: {str(e)}")
-                        st.stop()
-                    
-                    create_presentation_stickers(df_dish)
-                    
                     qr_updated_ppt_name = f'{current_date_time}_dish_sticker_barcode.pptx'
+                    prs = generate_dish_stickers_barcode(db)
+                    prs.save(qr_updated_ppt_name)
                     
                     # Check if file was created successfully
                     if os.path.exists(qr_updated_ppt_name):

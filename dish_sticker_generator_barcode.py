@@ -3,9 +3,9 @@ import os
 import json
 import glob
 from datetime import datetime, timedelta
-import time
 # Third-party imports
 import barcode
+import time
 from barcode.writer import ImageWriter
 import brother_ql
 from brother_ql.conversion import convert
@@ -18,9 +18,12 @@ from pptx import Presentation
 from pptx.util import Inches
 from pyairtable.api.table import Table
 import streamlit as st
+from store_access import new_database_access
 
 # Local imports
 import copy
+est = pytz.timezone('US/Eastern')
+current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
 
 # BASE_ID = "appkvckTQ86vhjSC0"  # 041025 
 BASE_ID = "appEe646yuQexwHJo" # production
@@ -39,17 +42,13 @@ class PPTGenerationError(Exception):
     pass
 
 def main():
-    df = read_client_serving()
-    # print(df.shape)
-    # print(df.columns)
-    df_dish = generate_sticker_df(df)
-    # print(df_dish)
-    # print(df_dish.head())
+    db = new_database_access()
 
-    create_presentation_stickers(df_dish)
-    
-    # Optionally print the generated stickers
+    prs = generate_dish_stickers_barcode(db)
+    prs.save(f'{current_date_time}_dish_sticker_barcode.pptx')
+
     print_stickers()
+    
 
 def resize_image(image_path, target_width, target_height):
     """
@@ -286,7 +285,11 @@ def copy_slide(template, prs):
 
     return new_slide
 
-def create_presentation_stickers(df):
+def generate_dish_stickers_barcode(db):
+    df_raw = read_client_serving(db)
+    # print(df.shape)
+    # print(df.columns)
+    df = generate_sticker_df(df_raw)
     # Load the presentation
     prs = Presentation('template/Dish_Sticker_Template_Barcode.pptx')
 
@@ -343,34 +346,14 @@ def create_presentation_stickers(df):
         
         # add background
         # new_slide = insert_background(new_slide, 'template/Dish_Sticker_Template_Barcode.png', prs)
-    
-    # Save the final presentation with verification
-    current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
-    updated_ppt_name = f'{current_date_time}_dish_sticker_barcode.pptx'
-    
-    try:
-        prs.save(updated_ppt_name)
-        # Verify the file was saved successfully
-        if not ensure_file_saved(updated_ppt_name):
-            raise PPTGenerationError(f"Failed to save presentation: {updated_ppt_name}")
-        print(f"Successfully saved presentation: {updated_ppt_name}")
-    except Exception as e:
-        raise PPTGenerationError(f"Error saving presentation: {str(e)}")
+    return prs
 
 
-def read_client_serving():
-    load_dotenv()
-    api_key = st.secrets.get("AIRTABLE_API_KEY")
-    
-    if not api_key:
-        raise AirTableError("Airtable API key not found. Please check your environment variables or secrets.")
+def read_client_serving(db):
     
     try:
         # Initialize table
-        table = Table(api_key, BASE_ID, TABLE_ID)
-        
-        # Get all records from the specified view
-        records = table.all(view=VIEW_ID)
+        records = db.get_clientservings_data(view=VIEW_ID)
         
         if not records:
             raise AirTableError("No records found in the specified view.")

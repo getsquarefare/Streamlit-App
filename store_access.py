@@ -5,6 +5,15 @@ from dotenv import load_dotenv
 from functools import cache
 import streamlit as st
 from exceptions import AirTableError, AirtableDataError  # Import from new exceptions file
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+class AirTableError(Exception):
+    """Custom exception for AirTable operations"""
+    pass
 
 class AirTable():
     def __init__(self, ex_api_key=None):
@@ -362,7 +371,6 @@ class AirTable():
 
         return
 
-
     def get_subscription_details_by_client_identifier(self, client_identifier):
         CLIENT_IDENTIFIER_FIELD = 'fld0igiHWQd8Sgh7S'
         fields_here = dict()
@@ -371,32 +379,12 @@ class AirTable():
         subscription_details = self.subscription_table.all(formula=formula)
         return subscription_details
 
-    def get_clientservings_data(self):
-        """Get all client servings data with Modified Recipe Details and component columns"""
-        # Field IDs for ClientServings table
-        CUSTOMER_NAME = 'fldDs6QXE6uYKIlRk'
-        DELIVERY_DATE = 'fld6YLCoS7XCFK04G'
-        DISH = 'fldmqHv4aXJxuJ8E2'
-        MODIFIED_RECIPE_DETAILS = 'fld7dTxR7ImOtzO4k'
-        STARCH = 'fldZKmvAeBTY9tRkR'  # Starch ingredients
-        PROTEIN = 'fldksE3QaxIIHzAIi'  # Protein/Meat ingredients  
-        SAUCE = 'fldOb13TV0bymcyF6'  # Sauce ingredients
-        GARNISH = 'fldgrNa89SJKSPtwY'  # Garnish ingredients
-        VEGGIE = 'fldHaAZr6fiWZbNaf'  # Veggie ingredients
-        MEAL = 'fld00H3SpKNqTbhC0'
-        MEAL_FROM_CLIENT = "fld00H3SpKNqTbhC0"
-        
-        fields_to_return = [
-            CUSTOMER_NAME, DELIVERY_DATE, DISH,
-            MODIFIED_RECIPE_DETAILS,
-            STARCH, PROTEIN, SAUCE, GARNISH, VEGGIE, MEAL, MEAL_FROM_CLIENT
-        ]
-        
+    def get_clientservings_data(self,view):
         try:
-            # Get all client servings from the view
-            # Note: Modified Recipe Details will be included by default since we're not using field filtering
-            records = self.clientserving_table.all(view='viw4WN1XsjMnHwMkt',fields=fields_to_return)
-           
+            if view:
+                records = self.clientserving_table.all(view=view)
+            else:
+                records = self.clientserving_table.all()
             return records
         except Exception as e:
             raise AirTableError(f"Failed to get client servings data: {str(e)}")
