@@ -18,6 +18,7 @@ from store_access import new_database_access
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+VIEW = "viw4WN1XsjMnHwMkt"
 
 def parse_sauce_multiplier(sauce_field):
     """Parse sauce multiplier from sauce field (e.g., 'Tomato Sauce (2 x sauce)' -> 2)"""
@@ -858,7 +859,7 @@ def generate_to_make_sheet(db):
     try:
         logger.info("Starting to-make sheet generation")
         # Get client servings data
-        client_servings = db.get_clientservings_data()
+        client_servings = db.get_clientservings_data(view=VIEW)
         if not client_servings:
             raise AirTableError("No client servings data found")
 
