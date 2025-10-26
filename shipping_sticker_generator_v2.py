@@ -1,274 +1,277 @@
-import streamlit as st
-import pandas as pd
 from pptx import Presentation
-import copy
+from pptx.util import Pt
 from datetime import datetime
 from math import ceil
-from pptx.util import Pt
-from pyairtable.api.table import Table
-from pyairtable.formulas import match
-import os
-from dotenv import load_dotenv
-from functools import cache
-import traceback
+from io import BytesIO
 import logging
+import copy
+from exceptions import AirTableError
+from store_access import new_database_access
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, 
-                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class AirTableError(Exception):
-    """Custom exception for AirTable related errors"""
-    pass
+VIEW = "viwdOQZFrb6gEzkU9"  # View for open orders
 
 class PPTGenerationError(Exception):
     """Custom exception for PowerPoint generation errors"""
     pass
 
-class AirTable():
-    def __init__(self, ex_api_key=None):
-        try:
-            # Load environment variables from the .env file
-            load_dotenv()
-            
-            # Get the API key from environment variables or the passed argument
-            self.api_key = ex_api_key or st.secrets.get("AIRTABLE_API_KEY")
-            
-            if not self.api_key:
-                raise AirTableError("Airtable API key not found. Please check your environment variables or secrets.")
-                
-            self.base_id = "appEe646yuQexwHJo"
-            
-            # Initialize tables
-            self.open_orders_table = Table(self.api_key, self.base_id, 'tblxT3Pg9Qh0BVZhM')
-            self.fields = {
-                'SHIPPING_ADDRESS_1': 'flddnU6Y02iIHp16G',
-                'SHIPPING_CITY': 'fldBIgt7ce5fEYLDG',
-                'SHIPPING_PROVINCE': 'fldGeLuYoGKiw227Y',
-                'SHIPPING_COUNTRY': 'fldnP3H74kAXKaIhN',
-                'SHIPPING_POSTAL_CODE': 'fldwqwf7WSbiP0hJg',
-                'SHIPPING_NAME': 'fldIEhlbz7JzbpTOK',
-                'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W',
-                'QUANTITY': 'fldvkwFMlBOW5um2y',
-                'SHIPPING_PHONE': 'fldMuPbe4DX0rmq5z',
-                'MEAL_TYPE': 'fldE0fWRfUnoHznqC',
-                'ZONE_NUMBER': 'fldbL18Ixas6ong0j'
-            }
-        except Exception as e:
-            logger.error(f"Error initializing AirTable: {str(e)}")
-            raise AirTableError(f"Failed to initialize AirTable connection: {str(e)}")
-    
-    def get_all_open_orders(self): 
-        try:
-            logger.info("Fetching open orders from Airtable")
-            data = self.open_orders_table.all(fields=self.fields.values(), view='viwDpTtU0qaT9NcvG')
-            
-            if not data:
-                logger.warning("No open orders found in Airtable")
-                return pd.DataFrame()
-                
-            df = pd.DataFrame([record['fields'] for record in data])
-            
-            # Rename columns to match expected format
-            field_mapping = {v: k for k, v in self.fields.items()}
-            df = df.rename(columns=field_mapping)
-            
-            # Standardize column names
-            df.columns = [col.replace('_', ' ').title() for col in df.columns]
-                
-            return df
-            
-        except Exception as e:
-            logger.error(f"Error fetching data from Airtable: {str(e)}")
-            raise AirTableError(f"Failed to fetch data from Airtable: {str(e)}")
 
-    def process_data(self, df):
-        try:
-            if df.empty:
-                logger.warning("No data to process")
-                return pd.DataFrame()
-            df.dropna(subset=['Shipping Name', 'Shipping Address 1','Quantity'], inplace=True)
-            logger.info("Processing order data")
-            portion_per_sticker = 6.8
-            
-            # Check if required columns exist
-            required_cols = ['Quantity', 'Meal Portion', 'Shipping Phone', 'Shipping Province',
-                            'Shipping Name', 'Shipping Address 1',
-                            'Shipping City', 'Shipping Postal Code','Zone Number (From Delivery Zone)']
-            missing_cols = [col for col in required_cols if col not in df.columns]
-            if missing_cols:
-                logger.error(f"Missing columns in data: {missing_cols}")
-                raise ValueError(f"Missing required columns: {', '.join(missing_cols)}. Please check the Airtable structure.")
-            
-            # Process quantity based on order type
-            df['Quantity'] = df.apply(
-                lambda row: 1 * 0.8 if row['Meal Portion'] == 'Breakfast' 
-                else (1 * 0.1 if row['Meal Portion'] == 'Snack' else 1), 
-                axis=1
-            )
-            
-            # Format phone numbers 
-            df['Shipping Phone'] = (df['Shipping Phone'].astype(str).fillna('')
-                    .str.replace(r'\D', '', regex=True)  # Remove non-digits
-                    .str.replace(r'(\d{3})(\d{3})(\d{4})', r'\1-\2-\3', regex=True))
-
-            # Extract zone number from list (Airtable returns lists for lookup fields)
-            df['Zone Number (From Delivery Zone)'] = df['Zone Number (From Delivery Zone)'].apply(
-                lambda x: str(x[0]) if isinstance(x, list) and len(x) > 0 else 'N/A'
-            )
-                    
-            # Standardize province format
-            df['Shipping Province'] = df['Shipping Province'].str.upper()
-            
-            # Fill any missing values
-            df.fillna('', inplace=True)
-            
-            # Group by shipping information
-            grouped_df = df.groupby([
-                'Shipping Name',
-                'Shipping Address 1',
-                'Shipping Address 2',
-                'Shipping City',
-                'Shipping Province',
-                'Shipping Postal Code',
-                'Shipping Phone',
-                'Zone Number (From Delivery Zone)'
-            ])['Quantity'].sum().reset_index()
-
-            # Calculate number of stickers needed
-            grouped_df['#_of_stickers'] = grouped_df['Quantity'].apply(
-                lambda x: ceil(x / portion_per_sticker) * 2
-            )
-            
-            return grouped_df
-            
-        except Exception as e:
-            logger.error(f"Error processing data: {str(e)}")
-            raise ValueError(f"Failed to process order data: {str(e)}")
-
-# Function to copy a slide from a template
-def copy_slide(template, target_prs):
+def process_order_data(db):
+    """Process order data from Airtable and group by shipping address"""
     try:
-        new_slide = target_prs.slides.add_slide(template.slide_layout)
+        logger.info("Starting order data processing")
+
+        # Get data from Airtable
+        orders = db.get_all_open_orders(view=VIEW)
+
+        if not orders:
+            raise AirTableError("No open orders found")
+
+        logger.info(f"Found {len(orders)} orders")
+
+        # Process each order
+        shipping_data = []
+        portion_per_sticker = 6.8
+
+        for order in orders:
+            fields = order['fields']
+
+            # Skip orders with missing required fields
+            required_fields = ['Shipping Name', 'Shipping Address 1', 'Quantity']
+            if not all(fields.get(field) for field in required_fields):
+                logger.warning(f"Skipping order with missing fields: {order.get('id', 'unknown')}")
+                continue
+
+            # Calculate quantity based on meal portion
+            meal_portion = fields.get('Meal Portion', '')
+            quantity = fields.get('Quantity', 0)
+
+            if meal_portion == 'Breakfast':
+                adjusted_quantity = quantity * 0.8
+            elif meal_portion == 'Snack':
+                adjusted_quantity = quantity * 0.1
+            else:
+                adjusted_quantity = quantity
+
+            # Format phone number
+            phone = fields.get('Shipping Phone', '')
+            if phone:
+                # Remove non-digits
+                phone_digits = ''.join(filter(str.isdigit, str(phone)))
+                if len(phone_digits) == 10:
+                    phone = f"{phone_digits[:3]}-{phone_digits[3:6]}-{phone_digits[6:]}"
+
+            # Extract zone number from list
+            zone = fields.get('Zone Number (from Delivery Zone)', 'N/A')
+            if isinstance(zone, list) and len(zone) > 0:
+                zone = str(zone[0])
+
+            # Create shipping record
+            shipping_record = {
+                'Shipping Name': fields.get('Shipping Name', ''),
+                'Shipping Address 1': fields.get('Shipping Address 1', ''),
+                'Shipping Address 2': fields.get('Shipping Address 2', ''),
+                'Shipping City': fields.get('Shipping City', ''),
+                'Shipping Province': fields.get('Shipping Province', '').upper(),
+                'Shipping Postal Code': fields.get('Shipping Postal Code', ''),
+                'Shipping Phone': phone,
+                'Zone Number': zone,
+                'Quantity': adjusted_quantity
+            }
+
+            shipping_data.append(shipping_record)
+
+        # Group by shipping address
+        grouped_shipping = {}
+        for record in shipping_data:
+            # Create unique key for grouping
+            key = (
+                record['Shipping Name'],
+                record['Shipping Address 1'],
+                record['Shipping Address 2'],
+                record['Shipping City'],
+                record['Shipping Province'],
+                record['Shipping Postal Code'],
+                record['Shipping Phone'],
+                record['Zone Number']
+            )
+
+            if key not in grouped_shipping:
+                grouped_shipping[key] = {
+                    'Shipping Name': record['Shipping Name'],
+                    'Shipping Address 1': record['Shipping Address 1'],
+                    'Shipping Address 2': record['Shipping Address 2'],
+                    'Shipping City': record['Shipping City'],
+                    'Shipping Province': record['Shipping Province'],
+                    'Shipping Postal Code': record['Shipping Postal Code'],
+                    'Shipping Phone': record['Shipping Phone'],
+                    'Zone Number': record['Zone Number'],
+                    'Total Quantity': 0
+                }
+
+            grouped_shipping[key]['Total Quantity'] += record['Quantity']
+
+        # Calculate number of stickers needed for each address
+        shipping_list = []
+        for shipping_info in grouped_shipping.values():
+            stickers_needed = ceil(shipping_info['Total Quantity'] / portion_per_sticker) * 2
+            shipping_info['Stickers Needed'] = stickers_needed
+            shipping_list.append(shipping_info)
+
+        logger.info(f"Processed {len(shipping_list)} unique shipping addresses")
+        return shipping_list
+
+    except Exception as e:
+        logger.error(f"Error processing order data: {str(e)}")
+        raise AirTableError(f"Error processing order data: {str(e)}")
+
+def copy_slide(template_slide, target_prs):
+    """Copy a slide from template to target presentation"""
+    try:
+        new_slide = target_prs.slides.add_slide(template_slide.slide_layout)
+
+        # Remove default shapes
         for shape in new_slide.shapes:
             sp = shape._element
             sp.getparent().remove(sp)
-        for shape in template.shapes:
+
+        # Copy shapes from template
+        for shape in template_slide.shapes:
             if not shape.has_text_frame:
                 continue
             new_shape = copy.deepcopy(shape)
             new_slide.shapes._spTree.insert_element_before(new_shape._element, 'p:extLst')
+
         return new_slide
+
     except Exception as e:
         logger.error(f"Error copying slide: {str(e)}")
         raise PPTGenerationError(f"Failed to copy slide template: {str(e)}")
 
-def generate_ppt(df, prs):
+def populate_sticker(slide, shipping_info):
+    """Populate a single sticker slide with shipping information"""
+    for shape in slide.shapes:
+        if not shape.has_text_frame:
+            continue
+
+        text_frame = shape.text_frame
+        for paragraph in text_frame.paragraphs:
+            text = paragraph.text
+
+            if 'Shipping Name' in text:
+                paragraph.text = shipping_info['Shipping Name']
+                paragraph.font.size = Pt(28)
+                paragraph.font.name = "Lato"
+
+            elif "Address" in text:
+                if shipping_info['Shipping Address 2']:
+                    paragraph.text = f"{shipping_info['Shipping Address 1']}, {shipping_info['Shipping Address 2']}"
+                else:
+                    paragraph.text = shipping_info['Shipping Address 1']
+                paragraph.font.size = Pt(24)
+                paragraph.font.name = "Lato"
+
+            elif "City" in text:
+                paragraph.text = f"{shipping_info['Shipping City']}, {shipping_info['Shipping Province']} {shipping_info['Shipping Postal Code']}"
+                paragraph.font.size = Pt(24)
+                paragraph.font.name = "Lato"
+
+            elif 'Shipping Phone' in text:
+                paragraph.text = str(shipping_info['Shipping Phone'])
+                paragraph.font.size = Pt(24)
+                paragraph.font.name = "Lato"
+
+            elif 'ZONE' in text:
+                paragraph.text = f"ZONE {shipping_info['Zone Number']}"
+                paragraph.font.size = Pt(28)
+                paragraph.font.name = "Lato"
+
+def create_shipping_stickers_ppt(shipping_list, template_path='template/Shipping_Sticker_Template.pptx'):
+    """Create PowerPoint presentation with shipping stickers"""
     try:
-        if df.empty:
-            logger.warning("No data available to generate PowerPoint")
-            raise ValueError("No shipping data available to generate stickers. Please check the Airtable data.")
+        logger.info("Starting PowerPoint generation")
+
+        if not shipping_list:
+            raise PPTGenerationError("No shipping data available to generate stickers")
+
+        # Load template
+        prs = Presentation(template_path)
+
         if len(prs.slides) == 0:
-            logger.error("Template presentation has no slides")
-            raise PPTGenerationError("The template presentation has no slides. Please check the template file.")
-            
-        logger.info(f"Generating PowerPoint with {len(df)} shipping entries")
-        last_slide_index = 0
+            raise PPTGenerationError("Template presentation has no slides")
+
         template_slide = prs.slides[0]
         total_stickers = 0
-        
-        for index, row in df.iterrows():
-            slide = copy_slide(template_slide, prs)
-            last_slide_index += 1
-            sticker_needed = row['#_of_stickers']
-            total_stickers += sticker_needed
-            
-            for shape in slide.shapes:
-                if shape.has_text_frame:
-                    text_frame = shape.text_frame
-                    for i, paragraph in enumerate(text_frame.paragraphs):
-                        if 'Shipping Name' in paragraph.text:
-                            paragraph.text = row['Shipping Name']
-                            paragraph.font.size = Pt(28)
-                            paragraph.font.name = "Lato"
-                        elif "Address" in paragraph.text:
-                            if row['Shipping Address 2'] != '':
-                                paragraph.text = f"{row['Shipping Address 1']}, {row['Shipping Address 2']}"
-                                paragraph.font.size = Pt(24)
-                                paragraph.font.name = "Lato"
-                            else:
-                                paragraph.text = f"{row['Shipping Address 1']}"
-                                paragraph.font.size = Pt(24)
-                                paragraph.font.name = "Lato"
-                        elif "City" in paragraph.text:
-                            paragraph.text = f"{row['Shipping City']}, {row['Shipping Province']} {row['Shipping Postal Code']}"
-                            paragraph.font.size = Pt(24)
-                            paragraph.font.name = "Lato"
-                        elif 'Shipping Phone' in paragraph.text:
-                            paragraph.text = str(row['Shipping Phone'])
-                            paragraph.font.size = Pt(24)
-                            paragraph.font.name = "Lato"
-                        elif 'ZONE' in paragraph.text:
-                            paragraph.text = 'ZONE ' + str(row['Zone Number (From Delivery Zone)'])
-                            paragraph.font.size = Pt(28)
-                            paragraph.font.name = "Lato"
-                            
-            if sticker_needed > 1:
-                count = 1
-                while count < sticker_needed:
-                    copy_slide(prs.slides[last_slide_index], prs)
-                    last_slide_index += 1
-                    count += 1
-                    
-        logger.info(f"Successfully generated {total_stickers} stickers")
-        return prs
-        
-    except Exception as e:
-        logger.error(f"Error generating PowerPoint: {str(e)}")
-        raise PPTGenerationError(f"Failed to generate shipping stickers: {str(e)}")
 
-def new_database_access():
-    try:
-        return AirTable()
-    except AirTableError as e:
-        raise e
+        logger.info(f"Generating stickers for {len(shipping_list)} shipping addresses")
 
-def generate_shipping_stickers(template_ppt):
-    try:
-        logger.info("Starting shipping sticker generation process")
-        ac = new_database_access()
-        data = ac.get_all_open_orders()
-        
-        if data.empty:
-            logger.warning("No open orders found")
-            raise ValueError("No open orders found in Airtable. Please check the 'Open Orders > Running Portioning' view.")
-            
-        cleaned_data = ac.process_data(data)
-        logger.info(f"Processing completed for {len(cleaned_data)} shipping entries")
-        
-        prs = generate_ppt(cleaned_data, template_ppt)
-        return prs
-        
-    except AirTableError as e:
-        logger.error(f"AirTable Error: {str(e)}")
-        raise
-    except PPTGenerationError as e:
-        logger.error(f"PowerPoint Generation Error: {str(e)}")
-        raise
+        for shipping_info in shipping_list:
+            stickers_needed = shipping_info['Stickers Needed']
+
+            # Create stickers for this address
+            for _ in range(stickers_needed):
+                slide = copy_slide(template_slide, prs)
+                populate_sticker(slide, shipping_info)
+                total_stickers += 1
+
+        # Remove the template slide
+        rId = prs.slides._sldIdLst[0].rId
+        prs.part.drop_rel(rId)
+        del prs.slides._sldIdLst[0]
+
+        logger.info(f"Successfully generated {total_stickers} stickers for {len(shipping_list)} addresses")
+
+        # Save to BytesIO
+        output = BytesIO()
+        prs.save(output)
+        output.seek(0)
+
+        return output
+
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        error_details = traceback.format_exc()
-        logger.debug(f"Detailed error: {error_details}")
-        raise ValueError(f"An unexpected error occurred: {str(e)}")
+        logger.error(f"Error creating PowerPoint: {str(e)}")
+        raise PPTGenerationError(f"Error creating shipping stickers: {str(e)}")
+
+def generate_shipping_stickers(db):
+    """Main method to generate shipping stickers"""
+    template_path = 'template/Shipping_Sticker_Template.pptx'
+    try:
+        logger.info("Starting shipping sticker generation")
+
+        # Process order data
+        shipping_list = process_order_data(db)
+
+        if not shipping_list:
+            raise AirTableError("No shipping addresses to process")
+
+        logger.info(f"Processing {len(shipping_list)} shipping addresses")
+
+        # Create PowerPoint file
+        ppt_file = create_shipping_stickers_ppt(shipping_list, template_path)
+
+        return ppt_file
+
+    except Exception as e:
+        logger.error(f"Error generating shipping stickers: {str(e)}")
+        raise AirTableError(f"Error generating shipping stickers: {str(e)}")
 
 
 if __name__ == "__main__":
     try:
-        prs_file = Presentation('template/Shipping_Sticker_Template.pptx')
-        prs = generate_shipping_stickers(prs_file)
-        output_path = f'shippingsticker_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pptx'
-        prs.save(output_path)
-        print(f"Stickers successfully generated and saved to {output_path}")
+        db = new_database_access()
+        ppt_file = generate_shipping_stickers(db)
+
+        # Write the BytesIO content to a file
+        filename = f'shipping_stickers_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pptx'
+        with open(filename, 'wb') as f:
+            f.write(ppt_file.getvalue())
+
+        logger.info(f"Successfully generated shipping stickers: {filename}")
+
+    except AirTableError as e:
+        logger.critical(f"Application error: {str(e)}")
     except Exception as e:
-        print(f"Error: {str(e)}")
+        logger.critical(f"Unexpected error: {str(e)}")

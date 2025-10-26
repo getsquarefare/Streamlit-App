@@ -413,7 +413,7 @@ class MealRecommendation:
 
     def generate_recommendations_with_thread(self):
         #self.db.delete_all_clientservings() # only when reset
-        open_orders = self.db.get_all_open_orders()
+        open_orders = self.db.get_all_open_orders_for_portioning()
         finishedCount = 0
         failedCount = 0
         failedCases = []
@@ -473,7 +473,7 @@ class MealRecommendation:
     def generate_recommendations(self):
         
         # self.db.delete_all_clientservings() # only when reset
-        open_orders = self.db.get_all_open_orders()
+        open_orders = self.db.get_all_open_orders_for_portioning()
         client_dish_pairs = self.build_client_dish_mapping(
             open_orders,
             shopify_id_column="#",

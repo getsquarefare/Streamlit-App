@@ -98,7 +98,7 @@ class AirTable():
     # #changed
     # @cache
 
-    def get_all_open_orders(self):
+    def get_all_open_orders_for_portioning(self):
         SHOPIFY_ID = 'fldXVHeLiy8npzVnb'
         DELETIONS = 'fldwgVkboOme5380s'
         QUANTITY = 'fldvkwFMlBOW5um2y'
@@ -519,6 +519,15 @@ class AirTable():
         except Exception as e:
             logger.warning(f"Ingredient not found with ID {rec_id}: {str(e)}")
             return None
+
+    def get_all_open_orders(self,view=None):
+        # Initialize tables
+        self.open_orders_table = Table(self.api_key, self.base_id, self.open_orders_table)
+        if view:
+            return self.open_orders_table.all(view=view)
+        else:
+            return self.open_orders_table.all()
+
 
 def new_database_access():
     return AirTable()
