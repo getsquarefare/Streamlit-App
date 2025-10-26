@@ -12,7 +12,7 @@ from store_access import new_database_access
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-VIEW = "viwdOQZFrb6gEzkU9"  # View for open orders
+VIEW = "viwDpTtU0qaT9NcvG"  # View for open orders
 
 class PPTGenerationError(Exception):
     """Custom exception for PowerPoint generation errors"""

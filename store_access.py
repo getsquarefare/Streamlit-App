@@ -522,7 +522,6 @@ class AirTable():
 
     def get_all_open_orders(self,view=None):
         # Initialize tables
-        self.open_orders_table = Table(self.api_key, self.base_id, self.open_orders_table)
         if view:
             return self.open_orders_table.all(view=view)
         else:
