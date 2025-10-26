@@ -11,7 +11,7 @@ from store_access import new_database_access
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def format_output_order_ingredients(db, deleted_ingredients, new_ingredients, final_ingredients_not_in_recommend):
+def format_output_order_ingredients(db, deleted_ingredients, new_ingredients, final_ingredients_not_in_recommend,tags):
     """Format output for ordered ingredients with deletions and additions"""
     components_output = {
         "Meat": [], 
@@ -32,7 +32,18 @@ def format_output_order_ingredients(db, deleted_ingredients, new_ingredients, fi
                 ingredient_name = ingredient_details['Ingredient Name']
                 ingredient_component = ingredient_details['Component']
                 if ingredient_component in components_output:
-                    components_output[ingredient_component].append("NO " + ingredient_name.upper())
+                    if (ingredient_component == 'Sauce' and 'No Sauce' in tags):
+                        components_output[ingredient_component].append("NO SAUCE")
+                    elif (ingredient_component == 'Starch' and 'No Starch' in tags):
+                        components_output[ingredient_component].append("NO STARCH")
+                    elif (ingredient_component == 'Veggies' and 'No Veggies' in tags):
+                        components_output[ingredient_component].append("NO VEGGIES")
+                    elif (ingredient_component == 'Garnish' and 'No Garnish' in tags):
+                        components_output[ingredient_component].append("NO GARNISH")
+                    elif (ingredient_component == 'Meat' and 'No Protein' in tags):
+                        components_output[ingredient_component].append("NO PROTEIN  ")
+                    else:
+                        components_output[ingredient_component].append("NO " + ingredient_name.upper())
                     
         # Process new ingredients
         for ingredient_id in new_ingredients:
@@ -42,7 +53,7 @@ def format_output_order_ingredients(db, deleted_ingredients, new_ingredients, fi
                 ingredient_component = ingredient_details['Component']
                 if ingredient_component in components_output:
                     if ingredient_id in final_ingredients_not_in_recommend:
-                        components_output[ingredient_component].append(ingredient_name.upper()+"(⭐️)")
+                        components_output[ingredient_component].append(ingredient_name.upper()+"(✩)")
                     else:
                         components_output[ingredient_component].append(ingredient_name.upper())
                     
@@ -97,6 +108,7 @@ def one_dish_output(db, dish_id):
             new_ingredients = client_serving['fields'].get('New Ingredients', [])
             ingredients_to_recommend = client_serving['fields'].get('Ingredients To Recommend (from Linked OrderItem)', [])
             final_ingredients_with_user_edits = client_serving['fields'].get('Final Ingredients With User Edits (from Linked OrderItem)', [])
+            tags = client_serving['fields'].get('Customization Tags (from To_Match_Client_Nutrition) (from Linked OrderItem)', [])
             
             # Get deleted ingredient names
             deleted_ingredients_names = []
@@ -126,7 +138,7 @@ def one_dish_output(db, dish_id):
             }
             
             # Get components output
-            components_output = format_output_order_ingredients(db, deleted_ingredients, new_ingredients, final_ingredients_not_in_recommend)
+            components_output = format_output_order_ingredients(db, deleted_ingredients, new_ingredients, final_ingredients_not_in_recommend,tags)
             
             # Add component amounts
             components_output['Meat'].append(
