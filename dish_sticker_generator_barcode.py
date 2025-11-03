@@ -41,14 +41,6 @@ class PPTGenerationError(Exception):
     """Custom exception for PowerPoint generation errors"""
     pass
 
-def main():
-    db = new_database_access()
-
-    prs = generate_dish_stickers_barcode(db)
-    prs.save(f'{current_date_time}_dish_sticker_barcode.pptx')
-
-    print_stickers()
-    
 
 def resize_image(image_path, target_width, target_height):
     """
@@ -194,44 +186,7 @@ def print_stickers():
 
 # Process Data 
 def generate_sticker_df(df):
-    # Debug: Print available columns
-    print(f"Available columns: {list(df.columns)}")
-    
-    # Define expected column names and their possible variations
-    column_mapping = {
-        "#": ["#", "ID", "id", "Record ID"],
-        "Customer Name": ["Customer Name", "customer_name", "CustomerName"],
-        "Meal Sticker (from Linked OrderItem)": ["Meal Sticker (from Linked OrderItem)", "meal_sticker", "MealSticker"],
-        "Meal Portion (from Linked OrderItem)": ["Meal Portion (from Linked OrderItem)", "meal_portion", "MealPortion"],
-        "Delivery Date": ["Delivery Date", "delivery_date", "DeliveryDate"],
-        "Position Id": ["Position Id", "position_id", "PositionId"],
-        "Dish ID (from Linked OrderItem)": ["Dish ID (from Linked OrderItem)"],
-        "Delivery Zone (from Linked OrderItem)": ["Delivery Zone (from Linked OrderItem)"]
-    }
-    
-    # Try to find the correct column names
-    found_columns = {}
-    missing_columns = []
-    
-    for expected_col, possible_names in column_mapping.items():
-        found = False
-        for possible_name in possible_names:
-            if possible_name in df.columns:
-                found_columns[expected_col] = possible_name
-                found = True
-                break
-        if not found:
-            missing_columns.append(expected_col)
-    
-    if missing_columns:
-        raise ValueError(f"Missing required columns: {missing_columns}. Available columns: {list(df.columns)}")
-    
-    # Select columns using the found column names
-    # selected_columns = [found_columns[col] for col in ["#", "Customer Name", "Meal Sticker (from Linked OrderItem)", "Meal Portion (from Linked OrderItem)", "Delivery Date", "Position Id", "Dish ID (from Linked OrderItem)","Delivery Zone (from Linked OrderItem)"]]
     df_dish = df.fillna('N/A')
-    
-    # Rename columns to expected names for consistency
-    df_dish = df_dish.rename(columns={found_columns[col]: col for col in found_columns})
     
     # Generate Requested Columns
     # barcode ID: got a float - change to string
@@ -256,6 +211,7 @@ def generate_sticker_df(df):
 
     meal_info = df_dish['Meal Sticker (from Linked OrderItem)'].apply(lambda x: x[0] if isinstance(x, list) else x)
     df_dish[['bowl_name', 'ingredients']] = meal_info.str.split(': ', n=1, expand=True)
+    df_dish['parts'] = df_dish['# of Parts'].apply(lambda x: x[0] if isinstance(x, list) else x)
 
     # duplicate according to '# portions'
     # df_dish = df_dish.loc[df_dish.index.repeat(df_dish['# portions'])]
@@ -286,10 +242,10 @@ def copy_slide(template, prs):
     return new_slide
 
 def generate_dish_stickers_barcode(db):
-    df_raw = read_client_serving(db)
+    client_serving_df = read_client_serving(db)
     # print(df.shape)
     # print(df.columns)
-    df = generate_sticker_df(df_raw)
+    df = generate_sticker_df(client_serving_df)
     # Load the presentation
     prs = Presentation('template/Dish_Sticker_Template_Barcode.pptx')
 
@@ -306,51 +262,72 @@ def generate_dish_stickers_barcode(db):
 
     
     if 'Dish ID (from Linked OrderItem)' in df.columns and 'Position Id' in df.columns:
-        df['Dish ID (from Linked OrderItem)'] = df['Dish ID (from Linked OrderItem)'].apply(
-            lambda x: int(x[0]) if isinstance(x, list) and len(x) > 0 and str(x[0]).isdigit() 
-            else (int(x) if isinstance(x, (int, float)) else x)
-        )
         df.sort_values(by=['Dish ID (from Linked OrderItem)', 'Position Id'], ascending=[True, True], inplace=True)
 
     # iterate each row in df_dish
     for _, row in df.iterrows():
-        # add one page copied from template
-        new_slide = copy_slide(slide, prs)
+        parts = row['parts']
+        for i in range(parts):
+            # add one page copied from template
+            new_slide = copy_slide(slide, prs)
 
-        for shape in new_slide.shapes:
-            if shape.has_text_frame:
-                key = shape.name 
-                text_frame = shape.text_frame
-                if text_frame.paragraphs and text_frame.paragraphs[0].runs:
-                    text_frame.paragraphs[0].runs[0].text = row[key]
+            for shape in new_slide.shapes:
+                if shape.has_text_frame:
+                    key = shape.name 
+                    text_frame = shape.text_frame
+                    if text_frame.paragraphs and text_frame.paragraphs[0].runs:
+                        text_frame.paragraphs[0].runs[0].text = row[key]
 
-        # ITF barcode generator, with transparent background
-        fileName = f'id_barcode_{row["#"]}'
-        itf = ITF(row["#"], writer = ImageWriter(mode = "RGBA")) 
-        itf.save(fileName, dict(quiet_zone=3, background = (255, 255, 255, 0), 
-                                    font_size = 5, text_distance = 2.5,
-                                    module_width = 0.3))
-        
-        # Ensure file is saved before proceeding
-        if not ensure_file_saved(fileName + '.png'):
-            raise PPTGenerationError(f"Failed to save barcode file: {fileName}")
-        
-        id_barcode = Image.open(fileName + '.png')
-        barcode_size = ((Inches(id_barcode.size[0] /id_barcode.size[1] * BARCODE_HEIGHT)), Inches(BARCODE_HEIGHT))
+            # ITF barcode generator, with transparent background
+            fileName = f'id_barcode_{row["#"]}'
+            itf = ITF(row["#"], writer = ImageWriter(mode = "RGBA")) 
+            itf.save(fileName, dict(quiet_zone=3, background = (255, 255, 255, 0), 
+                                        font_size = 5, text_distance = 2.5,
+                                        module_width = 0.3))
+            
+            # Ensure file is saved before proceeding
+            if not ensure_file_saved(fileName + '.png'):
+                raise PPTGenerationError(f"Failed to save barcode file: {fileName}")
+            
+            id_barcode = Image.open(fileName + '.png')
+            barcode_size = ((Inches(id_barcode.size[0] /id_barcode.size[1] * BARCODE_HEIGHT)), Inches(BARCODE_HEIGHT))
 
-        new_slide.shapes.add_picture(fileName + '.png', prs.slide_width - margin - barcode_size[0],
-                                        prs.slide_height - margin - barcode_size[1],
-                                        width = barcode_size[0], height = barcode_size[1])
-        # delete the file
-        os.remove(fileName + '.png')
-        
+            new_slide.shapes.add_picture(fileName + '.png', prs.slide_width - margin - barcode_size[0],
+                                            prs.slide_height - margin - barcode_size[1],
+                                            width = barcode_size[0], height = barcode_size[1])
+            # delete the file
+            os.remove(fileName + '.png')
+            
         # add background
         # new_slide = insert_background(new_slide, 'template/Dish_Sticker_Template_Barcode.png', prs)
     return prs
 
+def read_weekly_products(db):
+    fields_to_return = ['Internal Dish ID', '# of Parts']
+    try:
+        records = db.get_weekly_products()
+        if not records:
+            raise AirTableError("No records found in the specified view.")
+        
+        # Convert records to DataFrame
+        df = pd.DataFrame(records)
+        
+        # Extract fields from the records
+        if 'fields' in df.columns:
+            fields_df = pd.json_normalize(df['fields'])
+            # Combine the records with their fields
+            df_flat = pd.concat([df.drop('fields', axis=1), fields_df], axis=1)
+        else:
+            df_flat = df
+
+        df_flat = df_flat[fields_to_return]
+
+        return df_flat
+    except Exception as e:
+        raise AirTableError(f"Error fetching data from Airtable: {str(e)}")
 
 def read_client_serving(db):
-    
+    fields_to_return = ['#', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts']
     try:
         # Initialize table
         records = db.get_clientservings_data(view=VIEW_ID)
@@ -368,6 +345,13 @@ def read_client_serving(db):
             df_flat = pd.concat([df.drop('fields', axis=1), fields_df], axis=1)
         else:
             df_flat = df
+        
+        if 'Dish ID (from Linked OrderItem)' in df_flat.columns and 'Position Id' in df_flat.columns:
+            df_flat['Dish ID (from Linked OrderItem)'] = df_flat['Dish ID (from Linked OrderItem)'].apply(
+                lambda x: int(x[0]) if isinstance(x, list) and len(x) > 0 and str(x[0]).isdigit() 
+                else (int(x) if isinstance(x, (int, float)) else x)
+            )
+        df_flat = df_flat[fields_to_return]
             
         return df_flat
         
@@ -375,4 +359,9 @@ def read_client_serving(db):
         raise AirTableError(f"Error fetching data from Airtable: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    db = new_database_access()
+
+    prs = generate_dish_stickers_barcode(db)
+    prs.save(f'{current_date_time}_dish_sticker_barcode.pptx')
+
+    #print_stickers()

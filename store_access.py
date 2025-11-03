@@ -286,6 +286,15 @@ class AirTable():
             return shopify_id
         except KeyError:
             return None
+    def get_weekly_products(self,view = None):
+        try:
+            if view:
+                records = self.shopify_product_table.all(view=view)
+            else:
+                records = self.shopify_product_table.all()
+            return records
+        except Exception as e:
+            raise AirTableError(f"Failed to get weekly products data: {str(e)}")
 
     # changed, get the "name" column
     def get_identifier(self, id):
