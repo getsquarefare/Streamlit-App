@@ -408,13 +408,12 @@ def main():
                 
                 # Load template
                 prs_file = Presentation(template_path)
-                
                 # Check if template has at least 2 slides (display warning if not)
                 if len(prs_file.slides) < 2:
                     st.warning("Your template should include an instruction slide as the second slide. Proceeding without instructions.")
                 
                 # Generate one pagers (no background parameter)
-                prs = generate_one_pagers(prs_file)
+                prs = generate_one_pagers(db,template_path)
                 
                 updated_ppt_name = f'{current_date_time}_one_sheeter.pptx'
                 prs.save(updated_ppt_name)

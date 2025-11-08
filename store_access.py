@@ -275,6 +275,12 @@ class AirTable():
             return result
         else:
             return None
+    def get_all_clients(self,view=None):
+        if view:
+            records = self.client_table.all(view=view)
+        else:
+            records = self.client_table.all()
+        return records
 
     # method name changed
     # def get_sku(self,id):
