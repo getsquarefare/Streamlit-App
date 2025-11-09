@@ -276,7 +276,7 @@ def generate_dish_stickers_barcode(db):
                     key = shape.name 
                     text_frame = shape.text_frame
                     if text_frame.paragraphs and text_frame.paragraphs[0].runs:
-                        text_frame.paragraphs[0].runs[0].text = row[key]
+                        text_frame.paragraphs[0].runs[0].text = row.get(key, 'N/A')
 
             # ITF barcode generator, with transparent background
             fileName = f'id_barcode_{row["#"]}'
