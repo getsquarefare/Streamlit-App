@@ -273,10 +273,11 @@ def generate_dish_stickers_barcode(db):
 
             for shape in new_slide.shapes:
                 if shape.has_text_frame:
-                    key = shape.name 
+                    key = shape.name
                     text_frame = shape.text_frame
                     if text_frame.paragraphs and text_frame.paragraphs[0].runs:
-                        text_frame.paragraphs[0].runs[0].text = row.get(key, 'N/A')
+                        value = row.get(key, 'N/A')
+                        text_frame.paragraphs[0].runs[0].text = str(value) if value is not None else 'N/A'
 
             # ITF barcode generator, with transparent background
             fileName = f'id_barcode_{row["#"]}'
