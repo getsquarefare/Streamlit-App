@@ -314,6 +314,15 @@ def main():
                     st.error(f"Default template not found at {template_path}")
                     st.info("Please upload a custom template to continue")
                     st.stop()
+                else:
+                    with open(template_path, "rb") as template_file:
+                        st.download_button(
+                            label="⬇️ View Existing Template",
+                            data=template_file,
+                            file_name="Dish_Sticker_Template.pptx",
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            key="download_dish_sticker_template"
+                        )
                 prs_file = Presentation(template_path)
             except Exception as e:
                 st.error(f"Error loading default template: {str(e)}")
@@ -394,6 +403,15 @@ def main():
                     st.error(f"Default Barcode template not found at {qr_template_path}")
                     st.info("Please upload a custom template to continue")
                     st.stop()
+                else:
+                    with open(qr_template_path, "rb") as template_file:
+                        st.download_button(
+                            label="⬇️ View Existing Template",
+                            data=template_file,
+                            file_name="Dish_Sticker_Template_Barcode.pptx",
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            key="download_dish_sticker_barcode_template"
+                        )
                 qr_prs_file = Presentation(qr_template_path)
             except Exception as e:
                 st.error(f"Error loading default Barcode template: {str(e)}")
