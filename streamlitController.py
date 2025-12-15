@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 # Third-party imports
 import pandas as pd
 import pytz
+import requests
 import streamlit as st
 from pptx import Presentation
 
@@ -30,7 +31,33 @@ def main():
     # Set the time zone to Eastern Standard Time (EST)
     est = pytz.timezone('US/Eastern')
     current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
-   
+
+    #
+    st.divider()
+    st.header('Refresh Landing Page Cache 🔄')
+    st.markdown("⚠️ If you have made any changes to the Ingredients, Dishes, or Variants, you need to refresh the cache to see the changes.")
+
+    # API base URL for the landing page backend
+    LANDING_PAGE_API_URL = "https://orders.getsquarefare.com"
+
+    refresh_landing_page_cache_button = st.button("Refresh Landing Page Cache")
+    if refresh_landing_page_cache_button:
+        try:
+            with st.spinner('Refreshing caches...'):
+                # Call the refresh endpoint for both caches
+                response = requests.post(f"{LANDING_PAGE_API_URL}/api/refresh-cache", timeout=120)
+                if response.status_code == 200:
+                    st.success("Landing page cache refreshed successfully!")
+                    st.info("Please wait for a few minutes for the changes to take effect.")
+                    
+                else:
+                    st.error(f"Cache refresh failed: {response.text}")
+        except requests.exceptions.ConnectionError:
+            st.error("Could not connect to the landing page server. Is it running?")
+        except requests.exceptions.Timeout:
+            st.error("Request timed out. The cache refresh may still be in progress.")
+        except Exception as e:
+            st.error(f"Error refreshing cache: {str(e)}")
     # portion algo trigger
     st.divider()
     st.header('Portion Algorithm 🍽️')
@@ -95,7 +122,6 @@ def main():
     st.header(':blue[Shipping Sticker] - Local Uploads 🚚')
     with st.expander('Expand to see more details'):
         st.markdown("⚠️ Source Table: Uploaded Sheet")
-        st.subheader("Optional: replace existing PowerPoint template",divider="blue")
         # Display the shipping template file for double-checking
         # File uploader for the new template
         template_path = 'template/Shipping_Sticker_Local_Uploads_Template.pptx'
@@ -105,7 +131,7 @@ def main():
         if os.path.exists(template_path):
             with open(template_path, "rb") as template_file:
                 st.download_button(
-                    label="⬇️ Download Existing PowerPoint Template",
+                    label="⬇️ View Existing PowerPoint Template",
                     data=template_file,
                     file_name="Shipping_Sticker_Local_Uploads_Template.pptx",
                     mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -115,30 +141,30 @@ def main():
             st.warning(f"⚠️ Default template not found at {template_path}")
 
         # Upload new template to replace existing one
-        new_shipping_template = st.file_uploader(
-            "📤 Upload new PowerPoint template to replace existing (optional)",
-            type="pptx",
-            key="new_shipping_local_uploads_template",
-            help="Upload a new PowerPoint template to replace the current one"
-        )
+        # new_shipping_template = st.file_uploader(
+        #     "📤 Upload new PowerPoint template to replace existing (optional)",
+        #     type="pptx",
+        #     key="new_shipping_local_uploads_template",
+        #     help="Upload a new PowerPoint template to replace the current one"
+        # )
 
-        if new_shipping_template is not None:
-            try:
-                # Validate the uploaded template
-                test_prs = Presentation(new_shipping_template)
-                if len(test_prs.slides) == 0:
-                    st.error("❌ The uploaded template has no slides. Please upload a valid template.")
-                else:
-                    # Save the new template to the template folder
-                    os.makedirs('template', exist_ok=True)
-                    with open(template_path, 'wb') as f:
-                        f.write(new_shipping_template.getvalue())
-                    st.success(f"✅ Template successfully replaced! New template saved to {template_path}")
-            except Exception as e:
-                st.error(f"❌ Error loading uploaded template: {str(e)}")
-                st.info("Please upload a valid PowerPoint template file")
+        # if new_shipping_template is not None:
+        #     try:
+        #         # Validate the uploaded template
+        #         test_prs = Presentation(new_shipping_template)
+        #         if len(test_prs.slides) == 0:
+        #             st.error("❌ The uploaded template has no slides. Please upload a valid template.")
+        #         else:
+        #             # Save the new template to the template folder
+        #             os.makedirs('template', exist_ok=True)
+        #             with open(template_path, 'wb') as f:
+        #                 f.write(new_shipping_template.getvalue())
+        #             st.success(f"✅ Template successfully replaced! New template saved to {template_path}")
+        #     except Exception as e:
+        #         st.error(f"❌ Error loading uploaded template: {str(e)}")
+        #         st.info("Please upload a valid PowerPoint template file")
 
-        st.divider()
+        # st.divider()
 
         st.subheader("REQUIRED: upload csv file of address data",divider="blue")
            # Display existing shipping data template with download option
@@ -203,30 +229,30 @@ def main():
             st.warning(f"⚠️ Default template not found at {template_path}")
 
         # Upload new template to replace existing one
-        new_shipping_template = st.file_uploader(
-            "📤 Upload new template to replace existing (optional)",
-            type="pptx",
-            key="new_shipping_sticker_template",
-            help="Upload a new PowerPoint template to replace the current one"
-        )
+        # new_shipping_template = st.file_uploader(
+        #     "📤 Upload new template to replace existing (optional)",
+        #     type="pptx",
+        #     key="new_shipping_sticker_template",
+        #     help="Upload a new PowerPoint template to replace the current one"
+        # )
 
-        if new_shipping_template is not None:
-            try:
-                # Validate the uploaded template
-                test_prs = Presentation(new_shipping_template)
-                if len(test_prs.slides) == 0:
-                    st.error("❌ The uploaded template has no slides. Please upload a valid template.")
-                else:
-                    # Save the new template to the template folder
-                    os.makedirs('template', exist_ok=True)
-                    with open(template_path, 'wb') as f:
-                        f.write(new_shipping_template.getvalue())
-                    st.success(f"✅ Template successfully replaced! New template saved to {template_path}")
-            except Exception as e:
-                st.error(f"❌ Error loading uploaded template: {str(e)}")
-                st.info("Please upload a valid PowerPoint template file")
+        # if new_shipping_template is not None:
+        #     try:
+        #         # Validate the uploaded template
+        #         test_prs = Presentation(new_shipping_template)
+        #         if len(test_prs.slides) == 0:
+        #             st.error("❌ The uploaded template has no slides. Please upload a valid template.")
+        #         else:
+        #             # Save the new template to the template folder
+        #             os.makedirs('template', exist_ok=True)
+        #             with open(template_path, 'wb') as f:
+        #                 f.write(new_shipping_template.getvalue())
+        #             st.success(f"✅ Template successfully replaced! New template saved to {template_path}")
+        #     except Exception as e:
+        #         st.error(f"❌ Error loading uploaded template: {str(e)}")
+        #         st.info("Please upload a valid PowerPoint template file")
 
-        st.divider()
+        # st.divider()
         shipping_sticker_generate_button = st.button("Generate Shipping Stickers")
 
         if shipping_sticker_generate_button:
@@ -271,28 +297,28 @@ def main():
 
         # Template file handling with error checking
         try:
-            new_dish_sticker_template = st.file_uploader(":blue[Optionally Upload a new Dish_Sticker_Template.pptx]", type="pptx", key="new_dish_sticker_template")
+            # new_dish_sticker_template = st.file_uploader(":blue[Optionally Upload a new Dish_Sticker_Template.pptx]", type="pptx", key="new_dish_sticker_template")
             
-            if new_dish_sticker_template is not None:
-                try:
-                    prs_file = Presentation(new_dish_sticker_template)
-                    st.success("Custom template loaded successfully!")
-                except Exception as e:
-                    st.error(f"Error loading uploaded template: {str(e)}")
-                    st.info("Please upload a valid PowerPoint template file")
+            # if new_dish_sticker_template is not None:
+            #     try:
+            #         prs_file = Presentation(new_dish_sticker_template)
+            #         st.success("Custom template loaded successfully!")
+            #     except Exception as e:
+            #         st.error(f"Error loading uploaded template: {str(e)}")
+            #         st.info("Please upload a valid PowerPoint template file")
+            #         st.stop()
+            # else:
+            template_path = 'template/Dish_Sticker_Template.pptx'
+            try:
+                if not os.path.exists(template_path):
+                    st.error(f"Default template not found at {template_path}")
+                    st.info("Please upload a custom template to continue")
                     st.stop()
-            else:
-                template_path = 'template/Dish_Sticker_Template.pptx'
-                try:
-                    if not os.path.exists(template_path):
-                        st.error(f"Default template not found at {template_path}")
-                        st.info("Please upload a custom template to continue")
-                        st.stop()
-                    prs_file = Presentation(template_path)
-                except Exception as e:
-                    st.error(f"Error loading default template: {str(e)}")
-                    st.info("Please check that the template file exists and is not corrupted")
-                    st.stop()
+                prs_file = Presentation(template_path)
+            except Exception as e:
+                st.error(f"Error loading default template: {str(e)}")
+                st.info("Please check that the template file exists and is not corrupted")
+                st.stop()
         except Exception as e:
             st.error(f"File upload error: {str(e)}")
             st.stop()
@@ -351,28 +377,28 @@ def main():
         
         # Template file handling with error checking for Barcode generator
         try:
-            new_qr_dish_sticker_template = st.file_uploader(":blue[Optionally Upload a new Dish_Sticker_Template_Barcode.pptx]", type="pptx", key="new_qr_dish_sticker_template")
+            # new_qr_dish_sticker_template = st.file_uploader(":blue[Optionally Upload a new Dish_Sticker_Template_Barcode.pptx]", type="pptx", key="new_qr_dish_sticker_template")
             
-            if new_qr_dish_sticker_template is not None:
-                try:
-                    qr_prs_file = Presentation(new_qr_dish_sticker_template)
-                    st.success("Custom Barcode template loaded successfully!")
-                except Exception as e:
-                    st.error(f"Error loading uploaded Barcode template: {str(e)}")
-                    st.info("Please upload a valid PowerPoint template file")
+            # if new_qr_dish_sticker_template is not None:
+            #     try:
+            #         qr_prs_file = Presentation(new_qr_dish_sticker_template)
+            #         st.success("Custom Barcode template loaded successfully!")
+            #     except Exception as e:
+            #         st.error(f"Error loading uploaded Barcode template: {str(e)}")
+            #         st.info("Please upload a valid PowerPoint template file")
+            #         st.stop()
+            # else:
+            qr_template_path = 'template/Dish_Sticker_Template_Barcode.pptx'
+            try:
+                if not os.path.exists(qr_template_path):
+                    st.error(f"Default Barcode template not found at {qr_template_path}")
+                    st.info("Please upload a custom template to continue")
                     st.stop()
-            else:
-                qr_template_path = 'template/Dish_Sticker_Template_Barcode.pptx'
-                try:
-                    if not os.path.exists(qr_template_path):
-                        st.error(f"Default Barcode template not found at {qr_template_path}")
-                        st.info("Please upload a custom template to continue")
-                        st.stop()
-                    qr_prs_file = Presentation(qr_template_path)
-                except Exception as e:
-                    st.error(f"Error loading default Barcode template: {str(e)}")
-                    st.info("Please check that the template file exists and is not corrupted")
-                    st.stop()
+                qr_prs_file = Presentation(qr_template_path)
+            except Exception as e:
+                st.error(f"Error loading default Barcode template: {str(e)}")
+                st.info("Please check that the template file exists and is not corrupted")
+                st.stop()
         except Exception as e:
             st.error(f"File upload error: {str(e)}")
             st.stop()
@@ -419,10 +445,10 @@ def main():
         st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
         # File upload for template
-        new_one_pager_template = st.file_uploader(":blue[Optionally Upload new One_Pager_Template.pptx]", 
-                                                type="pptx", 
-                                                key="new_one_pager_template",
-                                                help="Include instruction slide as second slide")
+        # new_one_pager_template = st.file_uploader(":blue[Optionally Upload new One_Pager_Template.pptx]", 
+        #                                         type="pptx", 
+        #                                         key="new_one_pager_template",
+        #                                         help="Include instruction slide as second slide")
 
         st.markdown("⚠️ Please make sure all meal stickers are generated before running this one-sheeter generator")
         # Generate button
