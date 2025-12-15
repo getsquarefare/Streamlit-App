@@ -16,6 +16,9 @@ def process_shipping_data(uploaded_shipping_file):
     df_shipping = df_shipping.replace('-', '')
     df_shipping['Shipping Province'] = df_shipping['Shipping Province'].str.upper()
     df_shipping['merge_key_shippingname'] = df_shipping['Shipping Name'].str.lower()
+    df_shipping['Shipping Phone'] = df_shipping['Shipping Phone'].astype(str).str[:3] + '-' + df_shipping['Shipping Phone'].astype(str).str[3:6] + '-' + df_shipping['Shipping Phone'].astype(str).str[6:10]
+    df_shipping['Shipping Zip'] = df_shipping['Shipping Zip'].astype(str).str[:5]
+    df_shipping = df_shipping.dropna(subset=['Shipping Name'])
     return df_shipping
 
 def fetch_client_servings(sheet_id, sheet_name):
@@ -70,6 +73,48 @@ def copy_slide(template, target_prs):
         new_shape = copy.deepcopy(shape)
         new_slide.shapes._spTree.insert_element_before(new_shape._element, 'p:extLst')
     return new_slide
+
+def generate_ppt_v2(shipping_data_df, num_slide_per_address, template_path):
+    prs = Presentation(template_path)
+    last_slide_index = 0
+    template_slide = prs.slides[0]
+    for index, row in shipping_data_df.iterrows():
+        if row['Shipping Name'] == '':
+            continue
+        slide = copy_slide(template_slide, prs)
+        last_slide_index += 1
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                text_frame = shape.text_frame
+                for i, paragraph in enumerate(text_frame.paragraphs):
+                    if 'Shipping Name' in paragraph.text:
+                        paragraph.text = row['Shipping Name']
+                        paragraph.font.size = Pt(28)
+                        paragraph.font.name = "Calibri"
+                    elif "Address" in paragraph.text:
+                        if row['Shipping Address2'] != '':
+                            paragraph.text = f"{row['Shipping Address1']}, {row['Shipping Address2']}"
+                            paragraph.font.size = Pt(24)
+                            paragraph.font.name = "Calibri"
+                        else:
+                            paragraph.text = f"{row['Shipping Address1']}"
+                            paragraph.font.size = Pt(24)
+                            paragraph.font.name = "Calibri"
+                    elif "City" in paragraph.text:
+                        paragraph.text = f"{row['Shipping City']}, {row['Shipping Province']} {row['Shipping Zip']}"
+                        paragraph.font.size = Pt(24)
+                        paragraph.font.name = "Calibri"
+                    elif 'Shipping Phone' in paragraph.text:
+                        paragraph.text = str(row['Shipping Phone'])
+                        paragraph.font.size = Pt(24)
+                        paragraph.font.name = "Calibri"
+        if num_slide_per_address > 1:
+            count = 1
+            while count < num_slide_per_address:
+                copy_slide(prs.slides[last_slide_index], prs)
+                last_slide_index += 1
+                count += 1
+    return prs
 
 def generate_ppt_v1(final_match_result_with_portion_df, prs):
     

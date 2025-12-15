@@ -92,62 +92,92 @@ def main():
 
 
     # shipping_sticker_generator_v1
-    st.header(':blue[Shipping Sticker] - Google Sheets 🚚')
+    st.header(':blue[Shipping Sticker] - Local Uploads 🚚')
     with st.expander('Expand to see more details'):
         st.markdown("⚠️ Source Table: Uploaded Sheet")
+        st.subheader("Optional: replace existing PowerPoint template",divider="blue")
         # Display the shipping template file for double-checking
-        st.subheader("Step1: Upload Shipping Sticker Template",divider="blue")
         # File uploader for the new template
-        new_template_file = st.file_uploader(":blue[Upload template.ppt]", type="pptx")
-        prs_file = Presentation(new_template_file)
+        template_path = 'template/Shipping_Sticker_Local_Uploads_Template.pptx'
+        shipping_data_path = 'template/shipping_stickers_data_template.csv'
+
+        # Display existing template with download option
+        if os.path.exists(template_path):
+            with open(template_path, "rb") as template_file:
+                st.download_button(
+                    label="⬇️ Download Existing PowerPoint Template",
+                    data=template_file,
+                    file_name="Shipping_Sticker_Local_Uploads_Template.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    key="download_shipping_local_uploads_template"
+                )
+        else:
+            st.warning(f"⚠️ Default template not found at {template_path}")
+
+        # Upload new template to replace existing one
+        new_shipping_template = st.file_uploader(
+            "📤 Upload new PowerPoint template to replace existing (optional)",
+            type="pptx",
+            key="new_shipping_local_uploads_template",
+            help="Upload a new PowerPoint template to replace the current one"
+        )
+
+        if new_shipping_template is not None:
+            try:
+                # Validate the uploaded template
+                test_prs = Presentation(new_shipping_template)
+                if len(test_prs.slides) == 0:
+                    st.error("❌ The uploaded template has no slides. Please upload a valid template.")
+                else:
+                    # Save the new template to the template folder
+                    os.makedirs('template', exist_ok=True)
+                    with open(template_path, 'wb') as f:
+                        f.write(new_shipping_template.getvalue())
+                    st.success(f"✅ Template successfully replaced! New template saved to {template_path}")
+            except Exception as e:
+                st.error(f"❌ Error loading uploaded template: {str(e)}")
+                st.info("Please upload a valid PowerPoint template file")
+
+        st.divider()
+
+        st.subheader("REQUIRED: upload csv file of address data",divider="blue")
+           # Display existing shipping data template with download option
+        if os.path.exists(shipping_data_path):
+            with open(shipping_data_path, "rb") as template_file:
+                st.download_button(
+                    label="⬇️ Download Existing Shipping Data Template for Required Format",
+                    data=template_file,
+                    file_name="shipping_stickers_data_template.csv",
+                    mime="text/csv",
+                    key="download_shipping_data_template"
+                )
+        else:
+            st.warning(f"⚠️ Default shipping data template not found at {shipping_data_path}")
+
+        uploaded_shipping_file = st.file_uploader(":blue[Upload shipping_stickers_data.csv]", type="csv")
         
-        st.subheader("Step2: Upload Shipping Data",divider="blue")
-        uploaded_shipping_file = st.file_uploader(":blue[Upload shippingdata.csv]", type="csv")
 
-        if uploaded_shipping_file is not None:
+        if template_path is not None and uploaded_shipping_file is not None:
             df_shipping = process_shipping_data(uploaded_shipping_file)
-
+            num_slide_per_address = st.number_input("Enter the number of slides per address (Default: 1)", value=1, min_value=1, max_value=100, step=1)
             sticker_generate_button = st.button("Generate Stickers")
             if sticker_generate_button:
-                # Load client servings from Google Sheets
-                sheet_id = "1rorOBlH_K9qH4L39KehvI_rYGHo7agNVdCDisWydEj8"
-                LA_sheet_name = "ClientServings-LA"
-                NY_sheet_name = "ClientServings"
-                client_sheet_name = "Clients"
-
-                LA_clientservings_df = fetch_client_servings(sheet_id, LA_sheet_name)
-                NY_clientservings_df = fetch_client_servings(sheet_id, NY_sheet_name)
-
-                # Combine LA and NY client servings
-                all_client_servings = pd.concat([LA_clientservings_df, NY_clientservings_df], ignore_index=True)
-
-                # Fetch package recipent from Client
-                package_recipient_df = fetch_package_recipient(sheet_id, client_sheet_name)
-
-                # Attach package recipent to client servings
-                updated_all_client_servings = add_recipient_clientservings(all_client_servings,package_recipient_df)
-
-                # Match orders with shipping info
-                final_match_result_with_portion_df = match_orders_to_shipping_data(updated_all_client_servings, df_shipping)
 
                 # Generate the PowerPoint file
-                prs =generate_ppt_v1(final_match_result_with_portion_df, prs_file)
+                prs =generate_ppt_v2(df_shipping, num_slide_per_address,template_path)
 
-                # Optional: Display the final DataFrame for checking
-                st.subheader("Shipping Stickers")
-                st.markdown(":green[Stickers are ready! Click to download]")
-                current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
-                updated_ppt_name = f'{current_date_time}_shipping_sticker_updated.pptx'
-                prs.save(updated_ppt_name)
-                with open(updated_ppt_name, "rb") as file:
-                    st.download_button(
-                        label="Download Stickers",
-                        data=file,
-                        file_name=updated_ppt_name,
-                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                    )
-                st.caption(":orange[This is the final table which is fed to sticker ppt, for review purpose]")
-                st.dataframe(final_match_result_with_portion_df)
+                if prs is not None:
+                    st.markdown(":green[Stickers are ready! Click to download]")
+                    current_date_time = datetime.now(est).strftime("%Y%m%d_%H%M")
+                    updated_ppt_name = f'{current_date_time}_shipping_sticker_local_uploads.pptx'
+                    prs.save(updated_ppt_name)
+                    with open(updated_ppt_name, "rb") as file:
+                        st.download_button(
+                            label="Download Stickers",
+                            data=file,
+                            file_name=updated_ppt_name,
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                        )
 
 
     # shipping_sticker_generator_v2
