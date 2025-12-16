@@ -477,8 +477,8 @@ def main():
                 # Save uploaded files temporarily if needed
                 template_path = 'template/One_Pager_Template_v2.pptx'  # Default path
                 
-                if new_one_pager_template is not None:
-                    template_path = new_one_pager_template
+                # if new_one_pager_template is not None:
+                #     template_path = new_one_pager_template
                 
                 # Load template
                 prs_file = Presentation(template_path)
@@ -491,10 +491,6 @@ def main():
                 
                 updated_ppt_name = f'{current_date_time}_one_sheeter.pptx'
                 prs.save(updated_ppt_name)
-                
-                # Clean up temporary files
-                if new_one_pager_template is not None and os.path.exists(template_path):
-                    os.remove(template_path)
                 
             # Provide download link
             with open(updated_ppt_name, "rb") as file:
