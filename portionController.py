@@ -139,8 +139,6 @@ class MealRecommendation:
             ]
 
         # Retrieve additional constraints
-        # Param - Sauce Grams
-        sauce_grams = constraints.get("Sauce Amount", None)
         customization_tags = customer_requirements.get("Customization Tags", [])
         if customization_tags is None:
             customization_tags = []
@@ -153,6 +151,9 @@ class MealRecommendation:
         max_meal_grams_per_100_cal = constraints.get(
             "Maximum Meal Grams Per 100KCal", None
         )
+        fixed_protein_grams = constraints.get("Fixed Protein (g)", None)
+        fixed_starch_grams = constraints.get("Fixed Starch (g)", None)
+        fixed_veggies_grams = constraints.get("Fixed Veggies (g)", None)
         
         garnish_grams = 0
         # Param - Grouped Ingredients: use a normal dictionary to group different ingredients by
@@ -188,6 +189,9 @@ class MealRecommendation:
             min_meat_per_100_cal,
             max_meal_grams_per_100_cal,
             dish,
+            fixed_protein_grams,
+            fixed_starch_grams,
+            fixed_veggies_grams
         )
 
         #try:

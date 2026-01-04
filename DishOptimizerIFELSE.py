@@ -16,7 +16,8 @@ MAX_PROTEIN_PER_TYPE = {"meat": 200, "fish": 220, "tofu": 350, "vegan": 200}
 class NewDishOptimizer:
     def __init__(self, grouped_ingredients, customer_requirements, nutrients, nutrient_constraints,
                  garnish_grams=None, double_sauce=False, veggie_ge_starch=True, 
-                 min_meat_per_100_cal=None, max_meal_grams_per_100_cal=None, dish=None):
+                 min_meat_per_100_cal=None, max_meal_grams_per_100_cal=None, dish=None,
+                 fixed_protein_grams=None, fixed_starch_grams=None, fixed_veggies_grams=None):
         """ print(f"Initialized Dish Optimizer with {len(grouped_ingredients)} ingredients/n")
         print(f"grouped_ingredients: {grouped_ingredients}\n")
         print(f"Customer Requirements: {customer_requirements}\n")
@@ -43,7 +44,9 @@ class NewDishOptimizer:
         self.scaler_penalty_weight = 0.1  # Penalty weight for scaler deviations
         self.is_special_yogurt_protein = False  # Flag to track if we're processing a special protein item
         self.is_special_fruit_snack = False  # Flag to track if we're processing a special fruit snack
-        
+        self.fixed_protein_grams = fixed_protein_grams
+        self.fixed_starch_grams = fixed_starch_grams
+        self.fixed_veggies_grams = fixed_veggies_grams
         # Simplified base weights - only keep essential ones
         # Modified base weights - increased protein priority and fat penalty
         self.nutrient_weights = {
@@ -450,7 +453,15 @@ class NewDishOptimizer:
     def _is_valid_adjustment(self, recipe, idx, new_scaler):
         """New helper function to check if adjustment maintains constraints"""
         component = recipe[idx]['component']
-        
+
+        # If this component has fixed grams, don't allow any adjustment
+        if component == 'veggies' and self.fixed_veggies_grams is not None:
+            return True
+        if component == 'starch' and self.fixed_starch_grams is not None:
+            return True
+        if component == 'protein' and self.fixed_protein_grams is not None:
+            return True
+
         if component == 'veggies':
             potential_grams = sum(
                 self.get_effective_grams(x) if i != idx else x['baseGrams'] * new_scaler
@@ -464,7 +475,7 @@ class NewDishOptimizer:
                     return False
             elif potential_grams > MAX_VEGGIES_GRAM:
                 return False
-                
+
         elif component == 'starch':
             potential_grams = sum(
                 self.get_effective_grams(x) if i != idx else x['baseGrams'] * new_scaler
@@ -472,12 +483,12 @@ class NewDishOptimizer:
             )
             if potential_grams > MAX_STARCH_GRAM:
                 return False
-        
+
         elif component == 'protein' and self.is_special_yogurt_protein:
             potential_grams = recipe[idx]['baseGrams'] * new_scaler
             if potential_grams > MAX_SPECIAL_YOGURT_PROTEIN_GRAM:
                 return False
-        
+
         return True
 
     def _get_ingredient_adjustment(self, component, ratios, contributions):
@@ -581,7 +592,7 @@ class NewDishOptimizer:
         # Add small randomization to prevent getting stuck in local optima
         return adj
     
-    def _adjust_ingredients_sequentially(self, recipe, initial_nutrition):
+    def _adjust_ingredients_sequentially(self, recipe, initial_nutrition,fixed_protein_grams = None,fixed_starch_grams = None,fixed_veggies_grams = None):
         """Adjust ingredients one at a time following manual optimization steps"""
         adjusted_recipe = [{**ing} for ing in recipe]
         current_nutrition = initial_nutrition.copy()
@@ -598,6 +609,15 @@ class NewDishOptimizer:
         
         # Process each component group in sequence
         for component_group in component_sequence:
+            # Skip empty component groups (e.g., no starch in parfait)
+            if not component_group:
+                continue
+            if fixed_protein_grams and component_group[0][1]['component'] == 'protein':
+                continue
+            if fixed_starch_grams and component_group[0][1]['component'] == 'starch':
+                continue
+            if fixed_veggies_grams and component_group[0][1]['component'] == 'veggies':
+                continue
             for idx, ingredient in component_group:
                 # Calculate current nutrient gaps
                 nutrient_gaps = {
@@ -704,19 +724,22 @@ class NewDishOptimizer:
             return low_value or high_value  # Return whichever is non-zero
             
         def add_veggies_for_carbs(carbs_needed):
+            # Skip if veggies have fixed grams
+            if self.fixed_veggies_grams is not None:
+                return False
             # Try to add veggies to increase carbs
             total_veggie_grams = sum(self.get_effective_grams(item) for item in final_recipe if item["component"] == "veggies")
             remaining_veggie_capacity = MAX_VEGGIES_GRAM - total_veggie_grams
-            
+
             if remaining_veggie_capacity > 0:
                 # Find veggie with highest carb content
                 veggies = [item for item in final_recipe if item["component"] == "veggies"]
                 if veggies:
                     highest_carb_veggie = max(
-                        veggies, 
+                        veggies,
                         key=lambda x: x["carbohydrate(g)PerBaseGrams"]
                     )
-                    
+
                     # Calculate how many carbs we can add through veggies
                     carbs_per_gram = highest_carb_veggie["carbohydrate(g)PerBaseGrams"] / highest_carb_veggie["baseGrams"]
                     grams_to_add = min(remaining_veggie_capacity, carbs_needed / carbs_per_gram)
@@ -725,14 +748,17 @@ class NewDishOptimizer:
             return False
             
         def add_starch_for_carbs(carbs_needed):
+            # Skip if starch has fixed grams
+            if self.fixed_starch_grams is not None:
+                return False
             # Try to add starch to increase carbs
             starch_items = [item for item in final_recipe if item["component"] == "starch"]
             if starch_items:
                 starch_item = starch_items[0]
-                current_starch_grams = sum(self.get_effective_grams(item) for item in final_recipe 
+                current_starch_grams = sum(self.get_effective_grams(item) for item in final_recipe
                                         if item["component"] == "starch")
                 remaining_starch_capacity = MAX_STARCH_GRAM - current_starch_grams
-                
+
                 if remaining_starch_capacity > 0:
                     carbs_per_gram = starch_item["carbohydrate(g)PerBaseGrams"] / starch_item["baseGrams"]
                     grams_to_add = min(remaining_starch_capacity, carbs_needed / carbs_per_gram)
@@ -741,11 +767,14 @@ class NewDishOptimizer:
             return False
             
         def add_protein(protein_needed, for_calories=False):
+            # Skip if protein has fixed grams
+            if self.fixed_protein_grams is not None:
+                return False
             # Try to add protein to increase protein or calories
             protein_items = [item for item in final_recipe if item["component"] == "protein"]
             if protein_items:
                 protein_item = protein_items[0]
-                
+
                 # Determine how much to add based on protein or calories needed
                 if for_calories:
                     kcal_needed = get_kcal_needed()
@@ -754,9 +783,9 @@ class NewDishOptimizer:
                 else:
                     protein_per_gram = protein_item["protein(g)PerBaseGrams"] / protein_item["baseGrams"]
                     grams_to_add = protein_needed / protein_per_gram
-                
+
                 # Check if it's a special protein item
-                if (any(item.lower() in protein_item["ingredientName"].lower() 
+                if (any(item.lower() in protein_item["ingredientName"].lower()
                     for item in SPECIAL_YOGURT_PROTEIN_ITEM_KEYWORDS)):
                         current_grams = self.get_effective_grams(protein_item)
                         max_additional_grams = max(0, MAX_SPECIAL_YOGURT_PROTEIN_GRAM - current_grams)
@@ -768,7 +797,7 @@ class NewDishOptimizer:
                         grams_to_add = min(grams_to_add, remaining_protein_capacity)
                     else:
                         return False
-                        
+
                 protein_item["scaler"] += grams_to_add / protein_item["baseGrams"]
                 return True
             return False
@@ -788,20 +817,23 @@ class NewDishOptimizer:
             
         def reduce_protein(excess_protein):
             """Reduce protein when it's too high."""
+            # Skip if protein has fixed grams
+            if self.fixed_protein_grams is not None:
+                return False
             protein_items = [item for item in final_recipe if item["component"] == "protein"]
             if protein_items and excess_protein < 0:  # excess_protein will be negative when too high
                 protein_item = protein_items[0]
                 current_grams = self.get_effective_grams(protein_item)
-                
+
                 # Calculate how much to reduce while ensuring we don't go below MIN_PROTEIN_GRAM
                 protein_per_gram = protein_item["protein(g)PerBaseGrams"] / protein_item["baseGrams"]
                 grams_to_reduce = abs(excess_protein) / protein_per_gram
-                
+
                 # Ensure we don't reduce below minimum
                 min_protein_grams = MIN_PROTEIN_GRAM if hasattr(self, 'MIN_PROTEIN_GRAM') else current_grams * 0.5  # fallback to 50% reduction if no min defined
                 max_reducible = current_grams - min_protein_grams
                 grams_to_reduce = min(grams_to_reduce, max_reducible)
-                
+
                 if grams_to_reduce > 0:
                     scaler_reduction = grams_to_reduce / protein_item["baseGrams"]
                     protein_item["scaler"] = max(0.1, protein_item["scaler"] - scaler_reduction)  # Ensure we don't go below 0.1 scaler
@@ -812,61 +844,62 @@ class NewDishOptimizer:
             """Reduce carbs when they're too high, first starch then veggies."""
             if excess_carbs >= 0:  # Not excess
                 return False
-                
-            # First try to reduce starch
-            starch_items = [item for item in final_recipe if item["component"] == "starch"]
+
             reduced = False
-            
-            if starch_items:
-                starch_item = starch_items[0]
-                current_grams = self.get_effective_grams(starch_item)
-                carbs_per_gram = starch_item["carbohydrate(g)PerBaseGrams"] / starch_item["baseGrams"]
-                
-                # Calculate how much we need to reduce
-                grams_to_reduce = abs(excess_carbs) / carbs_per_gram
-                
-                # Ensure we don't reduce below minimum starch amount
-                min_starch_grams = MIN_STARCH_GRAM if hasattr(self, 'MIN_STARCH_GRAM') else current_grams * 0.5  # fallback to 50%
-                max_reducible = current_grams - min_starch_grams
-                grams_to_reduce = min(grams_to_reduce, max_reducible)
-                
-                if grams_to_reduce > 0:
-                    scaler_reduction = grams_to_reduce / starch_item["baseGrams"]
-                    starch_item["scaler"] = max(0.1, starch_item["scaler"] - scaler_reduction)
-                    reduced = True
-            
+
+            # First try to reduce starch (only if not fixed)
+            if self.fixed_starch_grams is None:
+                starch_items = [item for item in final_recipe if item["component"] == "starch"]
+                if starch_items:
+                    starch_item = starch_items[0]
+                    current_grams = self.get_effective_grams(starch_item)
+                    carbs_per_gram = starch_item["carbohydrate(g)PerBaseGrams"] / starch_item["baseGrams"]
+
+                    # Calculate how much we need to reduce
+                    grams_to_reduce = abs(excess_carbs) / carbs_per_gram
+
+                    # Ensure we don't reduce below minimum starch amount
+                    min_starch_grams = MIN_STARCH_GRAM if hasattr(self, 'MIN_STARCH_GRAM') else current_grams * 0.5  # fallback to 50%
+                    max_reducible = current_grams - min_starch_grams
+                    grams_to_reduce = min(grams_to_reduce, max_reducible)
+
+                    if grams_to_reduce > 0:
+                        scaler_reduction = grams_to_reduce / starch_item["baseGrams"]
+                        starch_item["scaler"] = max(0.1, starch_item["scaler"] - scaler_reduction)
+                        reduced = True
+
             # Recalculate and see if we still need to reduce carbs
             if reduced:
                 current_nutrition = self.calculate_total_nutrition(final_recipe)
                 notes = self.format_result(final_recipe, current_nutrition)['results']['notes']
                 excess_carbs = get_carbs_needed()
-            
-            # If still need to reduce carbs, try reducing veggies
-            if excess_carbs < 0:
+
+            # If still need to reduce carbs, try reducing veggies (only if not fixed)
+            if excess_carbs < 0 and self.fixed_veggies_grams is None:
                 veggie_items = [item for item in final_recipe if item["component"] == "veggies"]
                 if veggie_items:
                     # Find veggie with highest carb content to reduce
                     highest_carb_veggie = max(
-                        veggie_items, 
+                        veggie_items,
                         key=lambda x: x["carbohydrate(g)PerBaseGrams"]
                     )
-                    
+
                     current_grams = self.get_effective_grams(highest_carb_veggie)
                     carbs_per_gram = highest_carb_veggie["carbohydrate(g)PerBaseGrams"] / highest_carb_veggie["baseGrams"]
-                    
+
                     # Calculate how much we need to reduce
                     grams_to_reduce = abs(excess_carbs) / carbs_per_gram
-                    
+
                     # Ensure we don't reduce below minimum veggie amount
                     min_veggie_grams = MIN_VEGGIES_GRAM if hasattr(self, 'MIN_VEGGIES_GRAM') else current_grams * 0.5  # fallback to 50%
                     max_reducible = current_grams - min_veggie_grams
                     grams_to_reduce = min(grams_to_reduce, max_reducible)
-                    
+
                     if grams_to_reduce > 0:
                         scaler_reduction = grams_to_reduce / highest_carb_veggie["baseGrams"]
                         highest_carb_veggie["scaler"] = max(0.1, highest_carb_veggie["scaler"] - scaler_reduction)
                         return True
-            
+
             return reduced
             
         # -------------------------
@@ -1020,6 +1053,9 @@ class NewDishOptimizer:
         
         # Check if the dish only contains one or two components (excluding sauce and garnish)
         unique_components = set(item['component'] for item in recipe if item['component'] not in {'sauce', 'garnish'})
+        total_veggies_grams = sum(item['baseGrams'] for item in recipe if item['component'] == 'veggies')
+        total_starch_grams = sum(item['baseGrams'] for item in recipe if item['component'] == 'starch')
+        total_protein_grams = sum(item['baseGrams'] for item in recipe if item['component'] == 'protein')
         non_sauce_garnish_kcal = sum(
             item['kcalPerBaseGrams'] for item in recipe if item['component'] not in {'sauce', 'garnish'}
         )
@@ -1031,7 +1067,7 @@ class NewDishOptimizer:
             for item in recipe:
                 item['scaler'] = round((self.customer_requirements['kcal'] - sauce_garnish_kcal) / non_sauce_garnish_kcal)
             return self.format_result(recipe, self.calculate_total_nutrition(recipe))
-        elif (len(unique_components) <= 2):
+        elif (len(unique_components) <= 2) and not self.is_special_yogurt_protein:
             for item in recipe:
                 if item['component'] == 'sauce':
                     if self.double_sauce:
@@ -1042,10 +1078,7 @@ class NewDishOptimizer:
                     item['scaler'] = 1.0
                 else:
                     item['scaler'] = (self.customer_requirements['kcal'] - sauce_garnish_kcal) / non_sauce_garnish_kcal
-            if self.is_special_yogurt_protein:
-                recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
-                recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_YOGURT_VEGGIES_GRAM)
-            elif self.is_special_fruit_snack:
+            if self.is_special_fruit_snack:
                 recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM)
             else:
                 recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_VEGGIES_GRAM)
@@ -1055,7 +1088,7 @@ class NewDishOptimizer:
         
         # Initialize recipe with base scalers
         initial_nutrition = self.calculate_total_nutrition(recipe)
-        veggie_count = sum(1 for item in recipe if item['component'] == 'veggies')
+
         if initial_nutrition['kcal'] > 0:
             for ing in recipe:
                 if ing['component'] == 'sauce':
@@ -1065,14 +1098,29 @@ class NewDishOptimizer:
                         ing['scaler'] = 1.0
                 elif ing['component'] == 'garnish':
                     ing['scaler'] = 1.0
-                else:
+                # Apply fixed grams first - these override all other constraints
+                elif self.fixed_protein_grams is not None and ing['component'] == 'protein' and total_protein_grams > 0:
+                    ing['scaler'] = self.fixed_protein_grams / total_protein_grams
+                elif self.fixed_starch_grams is not None and ing['component'] == 'starch' and total_starch_grams > 0:
+                    ing['scaler'] = self.fixed_starch_grams / total_starch_grams
+                elif self.fixed_veggies_grams is not None and ing['component'] == 'veggies' and total_veggies_grams > 0:
+                    ing['scaler'] = self.fixed_veggies_grams / total_veggies_grams
+                # For non-fixed components, apply nutrition-based scaling
+                elif not self.is_special_fruit_snack and not self.is_special_yogurt_protein:
                     nutrition_ratio = (
-                        self.customer_requirements['protein(g)'] / initial_nutrition['protein(g)'] * 0.9 if ing['component'] == 'protein'
-                        else self.customer_requirements['carbohydrate(g)'] / initial_nutrition['carbohydrate(g)'] * 0.3 if ing['component'] == 'starch'
-                        else self.customer_requirements['dietaryFiber(g)'] / initial_nutrition['dietaryFiber(g)'] if ing['component'] == 'veggies'
+                        self.customer_requirements['protein(g)'] / initial_nutrition['protein(g)'] * 0.9 if ing['component'] == 'protein' and initial_nutrition['protein(g)'] > 0
+                        else self.customer_requirements['carbohydrate(g)'] / initial_nutrition['carbohydrate(g)'] * 0.3 if ing['component'] == 'starch' and initial_nutrition['carbohydrate(g)'] > 0
+                        else self.customer_requirements['dietaryFiber(g)'] / initial_nutrition['dietaryFiber(g)'] if ing['component'] == 'veggies' and initial_nutrition['dietaryFiber(g)'] > 0
                         else 1.0
                     )
-                    calorie_ratio = self.customer_requirements['kcal'] / initial_nutrition['kcal']
+                    ing['scaler'] = nutrition_ratio
+                else:
+                    nutrition_ratio = (
+                        self.customer_requirements['protein(g)'] / initial_nutrition['protein(g)'] * 0.9 if ing['component'] == 'protein' and initial_nutrition['protein(g)'] > 0
+                        else self.customer_requirements['carbohydrate(g)'] / initial_nutrition['carbohydrate(g)'] * 0.3 if ing['component'] == 'starch' and initial_nutrition['carbohydrate(g)'] > 0
+                        else self.customer_requirements['dietaryFiber(g)'] / initial_nutrition['dietaryFiber(g)'] if ing['component'] == 'veggies' and initial_nutrition['dietaryFiber(g)'] > 0
+                        else 1.0
+                    )
                     ing['scaler'] = nutrition_ratio
 
         if self.is_special_yogurt_protein:
@@ -1083,16 +1131,28 @@ class NewDishOptimizer:
         
 
         for iteration in range(max_iterations):
-            # Enforce component limits
-            recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
-            recipe = self.adjust_component_above_minimum(recipe, 'starch', MIN_STARCH_GRAM)
             if self.is_special_yogurt_protein:
-                recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
-                recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_YOGURT_VEGGIES_GRAM)
+                if self.fixed_protein_grams is None:
+                    recipe = self.adjust_component_within_limit(recipe, 'protein', MAX_SPECIAL_YOGURT_PROTEIN_GRAM)
+                if self.fixed_veggies_grams is None:
+                    recipe = self.adjust_component_within_limit(recipe, 'veggies', MAX_SPECIAL_YOGURT_VEGGIES_GRAM)
+            elif not self.is_special_fruit_snack:
+                # Only apply limits to components that don't have fixed grams
+                if self.fixed_starch_grams is None:
+                    recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
+                    recipe = self.adjust_component_above_minimum(recipe, 'starch', MIN_STARCH_GRAM)
+                if self.fixed_protein_grams is None:
+                    recipe = self.adjust_component_within_limit(recipe, 'protein', self.protein_max)
+                if self.fixed_veggies_grams is None:
+                    recipe = self.adjust_component_within_limit(recipe, 'veggies', veggies_limit)
             else:
-                recipe = self.adjust_component_within_limit(recipe, 'protein', self.protein_max)
-                recipe = self.adjust_component_within_limit(recipe, 'veggies', veggies_limit)
-           
+                if self.fixed_starch_grams is None:
+                    recipe = self.adjust_component_within_limit(recipe, 'starch', MAX_STARCH_GRAM)
+                    recipe = self.adjust_component_above_minimum(recipe, 'starch', MIN_STARCH_GRAM)
+                if self.fixed_protein_grams is None:
+                    recipe = self.adjust_component_within_limit(recipe, 'protein', self.protein_max)
+                if self.fixed_veggies_grams is None:
+                    recipe = self.adjust_component_within_limit(recipe, 'veggies', veggies_limit)
             # Get current state
             current_nutrition = self.calculate_total_nutrition(recipe)
             current_deviation = self.calculate_weighted_deviation(current_nutrition, self.customer_requirements, recipe)
@@ -1108,7 +1168,7 @@ class NewDishOptimizer:
                 return self.format_result(recipe, current_nutrition)
 
             # Sequential ingredient adjustment
-            adjusted_recipe = self._adjust_ingredients_sequentially(recipe, current_nutrition)
+            adjusted_recipe = self._adjust_ingredients_sequentially(recipe, current_nutrition,self.fixed_protein_grams,self.fixed_starch_grams,self.fixed_veggies_grams)
             
             # If no meaningful changes were made, break
             if self._recipes_are_similar(recipe, adjusted_recipe):
