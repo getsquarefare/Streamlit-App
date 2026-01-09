@@ -264,13 +264,21 @@ def generate_dish_stickers_barcode(db):
     if 'Dish ID (from Linked OrderItem)' in df.columns and 'Position Id' in df.columns:
         df.sort_values(by=['Dish ID (from Linked OrderItem)', 'Position Id'], ascending=[True, True], inplace=True)
 
-    # iterate each row in df_dish
-    for _, row in df.iterrows():
-        parts = row['parts']
-        for i in range(parts):
+    # Find the maximum number of parts across all rows
+    max_parts = df['parts'].max()
+
+    # Iterate by part number first (all Part 1s, then all Part 2s, etc.)
+    for part_num in range(max_parts):
+        # iterate each row in df_dish
+        for _, row in df.iterrows():
+            parts = row['parts']
+            # Skip if this row doesn't have this many parts
+            if part_num >= parts:
+                continue
+
             # add one page copied from template
             new_slide = copy_slide(slide, prs)
-        
+
             for shape in new_slide.shapes:
                 if shape.has_text_frame:
                     key = shape.name
@@ -280,20 +288,20 @@ def generate_dish_stickers_barcode(db):
                     if text_frame.paragraphs and text_frame.paragraphs[0].runs:
                         value = row.get(key, 'N/A')
                         if parts > 1 and key == ' parts':
-                            value = value + f"PART {i+1}/{parts}"
+                            value = value + f"PART {part_num+1}/{parts}"
                         text_frame.paragraphs[0].runs[0].text = str(value) if value is not None else 'N/A'
 
             # ITF barcode generator, with transparent background
             fileName = f'id_barcode_{row["#"]}'
-            itf = ITF(row["#"], writer = ImageWriter(mode = "RGBA")) 
-            itf.save(fileName, dict(quiet_zone=3, background = (255, 255, 255, 0), 
+            itf = ITF(row["#"], writer = ImageWriter(mode = "RGBA"))
+            itf.save(fileName, dict(quiet_zone=3, background = (255, 255, 255, 0),
                                         font_size = 5, text_distance = 2.5,
                                         module_width = 0.3))
-            
+
             # Ensure file is saved before proceeding
             if not ensure_file_saved(fileName + '.png'):
                 raise PPTGenerationError(f"Failed to save barcode file: {fileName}")
-            
+
             id_barcode = Image.open(fileName + '.png')
             barcode_size = ((Inches(id_barcode.size[0] /id_barcode.size[1] * BARCODE_HEIGHT)), Inches(BARCODE_HEIGHT))
 
@@ -302,9 +310,6 @@ def generate_dish_stickers_barcode(db):
                                             width = barcode_size[0], height = barcode_size[1])
             # delete the file
             os.remove(fileName + '.png')
-            
-        # add background
-        # new_slide = insert_background(new_slide, 'template/Dish_Sticker_Template_Barcode.png', prs)
     return prs
 
 def read_weekly_products(db):
