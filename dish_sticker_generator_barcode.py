@@ -282,13 +282,15 @@ def generate_dish_stickers_barcode(db):
             for shape in new_slide.shapes:
                 if shape.has_text_frame:
                     key = shape.name
-                    if parts == 1 and key == ' parts':
-                        continue
                     text_frame = shape.text_frame
                     if text_frame.paragraphs and text_frame.paragraphs[0].runs:
                         value = row.get(key, 'N/A')
-                        if parts > 1 and key == ' parts':
-                            value = value + f"PART {part_num+1}/{parts}"
+                        if key == 'parts':
+                            if parts > 1:
+                                value = f"PART {part_num+1}/{parts}"
+                            else:
+                                value = ''
+                            #print(f"DEBUG: key={key}, parts={parts}, value={value}")
                         text_frame.paragraphs[0].runs[0].text = str(value) if value is not None else 'N/A'
 
             # ITF barcode generator, with transparent background
