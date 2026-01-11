@@ -29,7 +29,8 @@ def get_open_orders(db):
         'SHIPPING_POSTAL_CODE': 'fldwqwf7WSbiP0hJg',
         'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W',
         'CUSTOMER_NAME': 'fldWYJStYSpX72pG3',
-        'PARTS': 'fldebKYuTeuQfauil'   
+        'PARTS': 'fldebKYuTeuQfauil',
+        'ZONE_NUMBER': 'fldbL18Ixas6ong0j'   
     }
     data = db.get_all_open_orders(view='viwuVy9aN2LLZrcPF')
     # Create DataFrame and map column names
@@ -70,7 +71,7 @@ def process_data(db):
     required_cols = [
         'Delivery Date', 'Meal Sticker', 'Meal Portion', 'To_Match_Client_Nutrition',
         'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
-        'Shipping Province', 'Shipping Postal Code', 'Customer Name','# of Parts'
+        'Shipping Province', 'Shipping Postal Code', 'Customer Name','# of Parts','Zone Number (from Delivery Zone)'
     ]
 
     # Ensure all required columns exist (missing ones will be created and filled with "")
@@ -119,11 +120,14 @@ def process_data(db):
     
     # Rename client column for consistent merging
     df_orders.rename(columns={'To_Match_Client_Nutrition': 'CLIENT'}, inplace=True)
+    df_orders.rename(columns={'Zone Number (from Delivery Zone)': 'ZONE_NUMBER'}, inplace=True)
     df_clients.rename(columns={'id': 'CLIENT'}, inplace=True)
     
     # Ensure client names are cleaned
     df_orders.CLIENT = df_orders.CLIENT.apply(lambda x: str(x).strip() if isinstance(x, str) else x)
     df_clients.CLIENT = df_clients.CLIENT.apply(lambda x: str(x).strip() if isinstance(x, str) else x)
+
+    df_orders.ZONE_NUMBER = df_orders.ZONE_NUMBER.apply(lambda x: str(x[0] if isinstance(x, list) else str(x).strip()))
     
     # Process nutrition information
     for _, row in df_clients.iterrows():
@@ -285,9 +289,11 @@ def process_data(db):
         'Shipping Province': 'first',
         'Shipping Postal Code': 'first',
         'NUTRITION': 'first',
+        'ZONE_NUMBER': 'first',
         # Combine these for each page
         'portion_str': lambda x: '\n\n'.join(x),
-        'Meal Sticker': lambda x: '\n\n'.join(x)
+        'Meal Sticker': lambda x: '\n\n'.join(x),
+        
     }).reset_index()
 
     # Rename the aggregated columns to match expected names
@@ -380,6 +386,11 @@ def process_data(db):
     df_merge_grouped['line_portion'] = df_merge_grouped.portion_list
     df_merge_grouped['line_nutrition'] = df_merge_grouped.NUTRITION
     df_merge_grouped['line_dishes'] = df_merge_grouped.dish_list
+    #number of items on the page (count dishes in dish_list, split by '\n\n')
+    df_merge_grouped['line_totalItems'] = df_merge_grouped['dish_list'].apply(lambda x: str(len(x.split('\n\n'))) + ' item(s)' if x else '0 item(s)')
+    #if has ice pack item, if so, mark true, otherwise false
+    df_merge_grouped['line_icePack'] = df_merge_grouped['dish_list'].apply(lambda x: 'Include ice pack' if 'Ice Pack' in str(x) else '')
+    df_merge_grouped['line_zone'] = 'Zone ' + df_merge_grouped['ZONE_NUMBER']
     
     
     # Sort by household group to ensure all members of the same household are together
