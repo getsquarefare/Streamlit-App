@@ -2,6 +2,7 @@
 import os
 import json
 import glob
+from io import BytesIO
 from datetime import datetime, timedelta
 # Third-party imports
 import barcode
@@ -19,6 +20,7 @@ from pptx.util import Inches
 from pyairtable.api.table import Table
 import streamlit as st
 from store_access import new_database_access
+import gc
 
 # Local imports
 import copy
@@ -241,40 +243,56 @@ def copy_slide(template, prs):
 
     return new_slide
 
-def generate_dish_stickers_barcode(db):
+def generate_dish_stickers_barcode(db, progress_placeholder=None):
+    """
+    Generate dish stickers with barcode.
+
+    Args:
+        db: Database access object
+        progress_placeholder: Optional Streamlit placeholder for progress updates
+    """
     client_serving_df = read_client_serving(db)
-    # print(df.shape)
-    # print(df.columns)
+    print(client_serving_df.head())
     df = generate_sticker_df(client_serving_df)
     # Load the presentation
     prs = Presentation('template/Dish_Sticker_Template_Barcode.pptx')
 
     # Get the first slide
     slide = prs.slides[0]
-    # for i in slide.shapes:
-    #     print('%d %s' % (i.shape_id, i.name))
-    #     print(i.text_frame.text)
 
     # https://python-barcode.readthedocs.io/en/stable/getting-started.html#usage
     ITF = barcode.get_barcode_class('ITF')
     BARCODE_HEIGHT = 0.75
     margin = Inches(0.05)
 
-    
+
     if 'Dish ID (from Linked OrderItem)' in df.columns and 'Position Id' in df.columns:
         df.sort_values(by=['Dish ID (from Linked OrderItem)', 'Position Id'], ascending=[True, True], inplace=True)
 
     # Find the maximum number of parts across all rows
     max_parts = df['parts'].max()
+    total_slides = df['parts'].sum()
+    print(f"Max parts: {max_parts}, Total rows: {len(df)}, Total slides to generate: {total_slides}")
 
+    slide_count = 0
     # Iterate by part number first (all Part 1s, then all Part 2s, etc.)
     for part_num in range(max_parts):
-        # iterate each row in df_dish
-        for _, row in df.iterrows():
+        # Filter to only rows that have this part number
+        rows_with_part = df[df['parts'] > part_num]
+        print(f"Part {part_num + 1}: processing {len(rows_with_part)} rows")
+
+        for idx, row in rows_with_part.iterrows():
+            slide_count += 1
+            if slide_count % 20 == 0:
+                gc.collect()
+
+            status_msg = f"Slide {slide_count}/{total_slides} - {row['client_name']} ({row['#']})"
+            print(f"  {status_msg}")
+
+            # Update Streamlit progress if placeholder provided
+            if progress_placeholder is not None:
+                progress_placeholder.text(status_msg)
             parts = row['parts']
-            # Skip if this row doesn't have this many parts
-            if part_num >= parts:
-                continue
 
             # add one page copied from template
             new_slide = copy_slide(slide, prs)
@@ -293,25 +311,23 @@ def generate_dish_stickers_barcode(db):
                             #print(f"DEBUG: key={key}, parts={parts}, value={value}")
                         text_frame.paragraphs[0].runs[0].text = str(value) if value is not None else 'N/A'
 
-            # ITF barcode generator, with transparent background
-            fileName = f'id_barcode_{row["#"]}'
-            itf = ITF(row["#"], writer = ImageWriter(mode = "RGBA"))
-            itf.save(fileName, dict(quiet_zone=3, background = (255, 255, 255, 0),
-                                        font_size = 5, text_distance = 2.5,
-                                        module_width = 0.3))
+            # ITF barcode generator, directly to memory (no disk I/O)
+            itf = ITF(row["#"], writer=ImageWriter(mode="RGBA"))
+            barcode_buffer = BytesIO()
+            itf.write(barcode_buffer, dict(quiet_zone=3, background=(255, 255, 255, 0),
+                                           font_size=5, text_distance=2.5,
+                                           module_width=0.3))
+            barcode_buffer.seek(0)
 
-            # Ensure file is saved before proceeding
-            if not ensure_file_saved(fileName + '.png'):
-                raise PPTGenerationError(f"Failed to save barcode file: {fileName}")
+            id_barcode = Image.open(barcode_buffer)
+            barcode_size = ((Inches(id_barcode.size[0] / id_barcode.size[1] * BARCODE_HEIGHT)), Inches(BARCODE_HEIGHT))
 
-            id_barcode = Image.open(fileName + '.png')
-            barcode_size = ((Inches(id_barcode.size[0] /id_barcode.size[1] * BARCODE_HEIGHT)), Inches(BARCODE_HEIGHT))
-
-            new_slide.shapes.add_picture(fileName + '.png', prs.slide_width - margin - barcode_size[0],
-                                            prs.slide_height - margin - barcode_size[1],
-                                            width = barcode_size[0], height = barcode_size[1])
-            # delete the file
-            os.remove(fileName + '.png')
+            # Reset buffer position for pptx to read
+            barcode_buffer.seek(0)
+            new_slide.shapes.add_picture(barcode_buffer, prs.slide_width - margin - barcode_size[0],
+                                         prs.slide_height - margin - barcode_size[1],
+                                         width=barcode_size[0], height=barcode_size[1])
+            id_barcode.close()
     return prs
 
 def read_weekly_products(db):

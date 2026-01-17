@@ -432,9 +432,11 @@ def main():
                     if len(qr_prs_file.slides) == 0:
                         st.error("The Barcode template contains no slides. Please use a valid template.")
                         st.stop()
-                    
+
                     qr_updated_ppt_name = f'{current_date_time}_dish_sticker_barcode.pptx'
-                    prs = generate_dish_stickers_barcode(db)
+                    progress_placeholder = st.empty()
+                    prs = generate_dish_stickers_barcode(db, progress_placeholder=progress_placeholder)
+                    progress_placeholder.empty()  # Clear progress text when done
                     prs.save(qr_updated_ppt_name)
                     
                     # Check if file was created successfully
