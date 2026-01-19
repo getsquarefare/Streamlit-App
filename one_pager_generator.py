@@ -357,6 +357,7 @@ def process_data(db):
     df_merge_grouped['line_portion'] = df_merge_grouped.portion_list
     df_merge_grouped['line_nutrition'] = df_merge_grouped.NUTRITION
     df_merge_grouped['line_dishes'] = df_merge_grouped.dish_list
+    df_merge_grouped['is_shipping_contact'] = df_merge_grouped['Shipping Name'].str.lower() == (df_merge_grouped['First_Name'].str.lower() + ' ' + df_merge_grouped['Last_Name'].str.lower())
 
     # Calculate total items per household (excluding ice pack)
     def count_dishes_excluding_ice_pack(dish_list):
@@ -536,7 +537,8 @@ def insert_instruction_sheet(prs, instruction_template_path=None):
 
 def generate_ppt(df, template_path):
     prs = Presentation(template_path)
-    df.sort_values(by=['HOUSEHOLD_MEMBERS', 'Shipping Name'], inplace=True)
+    df.sort_values(by=['HOUSEHOLD_MEMBERS', 'is_shipping_contact', 'Shipping Name'], ascending=[True, False, True],inplace=True)
+    #print(df[['HOUSEHOLD_MEMBERS','is_shipping_contact','Shipping Name']])
     #df.to_excel("output.xlsx", index=False)
     # Get the first slide as a template
     template_slide = prs.slides[0]
