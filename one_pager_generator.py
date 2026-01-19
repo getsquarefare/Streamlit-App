@@ -30,7 +30,8 @@ def get_open_orders(db):
         'SHIPPING_ADDRESS_2': 'fldRUUiFRRYQ52k0W',
         'CUSTOMER_NAME': 'fldWYJStYSpX72pG3',
         'PARTS': 'fldebKYuTeuQfauil',
-        'ZONE_NUMBER': 'fldbL18Ixas6ong0j'   
+        'ZONE_NUMBER': 'fldbL18Ixas6ong0j',
+        'SHIPPING_NAME': 'fldIEhlbz7JzbpTOK'
     }
     data = db.get_all_open_orders(view='viwuVy9aN2LLZrcPF')
     # Create DataFrame and map column names
@@ -71,7 +72,7 @@ def process_data(db):
     required_cols = [
         'Delivery Date', 'Meal Sticker', 'Meal Portion', 'To_Match_Client_Nutrition',
         'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
-        'Shipping Province', 'Shipping Postal Code', 'Customer Name','# of Parts','Zone Number (from Delivery Zone)'
+        'Shipping Province', 'Shipping Postal Code', 'Customer Name','# of Parts','Zone Number (from Delivery Zone)','Shipping Name'
     ]
 
     # Ensure all required columns exist (missing ones will be created and filled with "")
@@ -249,6 +250,7 @@ def process_data(db):
         # Keep the first occurrence of these customer details per page
         'First_Name': 'first',
         'Last_Name': 'first',
+        'Shipping Name': 'first',
         'Delivery Date': 'first',
         'Shipping Address 1': 'first',
         'Shipping Address 2': 'first',
@@ -534,7 +536,7 @@ def insert_instruction_sheet(prs, instruction_template_path=None):
 
 def generate_ppt(df, template_path):
     prs = Presentation(template_path)
-    df.sort_values(by=['HOUSEHOLD_MEMBERS', 'CLIENT_UNIQUE_ID'], inplace=True)
+    df.sort_values(by=['HOUSEHOLD_MEMBERS', 'Shipping Name'], inplace=True)
     #df.to_excel("output.xlsx", index=False)
     # Get the first slide as a template
     template_slide = prs.slides[0]
