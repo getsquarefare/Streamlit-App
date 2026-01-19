@@ -244,39 +244,6 @@ def process_data(db):
     df_merge = pd.concat(new_dfs, ignore_index=True)
     df_merge = df_merge.drop('temp_group', axis=1)
 
-    # Add ice pack rows for customers who have ice pack tag
-    customers_with_ice_pack = df_merge[df_merge['Customization Tags'].apply(lambda x: isinstance(x, list) and ICE_PACK_TAG in x)]['Customer Name'].unique()
-
-    ice_pack_rows = []
-    for customer in customers_with_ice_pack:
-        # Get all pages for this customer
-        customer_pages = df_merge[df_merge['Customer Name'] == customer]
-        max_page = int(customer_pages['page_number'].max())
-
-        # Add ice pack to each page
-        for page in range(max_page + 1):
-            # Get items for this page
-            page_items = customer_pages[customer_pages['page_number'] == page]
-            if not page_items.empty:
-                # Get the last row for this page to copy details
-                customer_row = page_items.iloc[-1].copy()
-                # Create ice pack row
-                ice_pack_row = customer_row.copy()
-                ice_pack_row['Meal Sticker'] = 'Ice Pack'
-                ice_pack_row['Index'] = page_items['Index'].max() + 1  # Make it the next index after the last item
-                ice_pack_row['page_number'] = page  # Keep it on the same page
-                ice_pack_rows.append(ice_pack_row)
-
-    if ice_pack_rows:
-        df_merge = pd.concat([df_merge, pd.DataFrame(ice_pack_rows)], ignore_index=True)
-
-    # Sort so ice pack rows are at the bottom of each group
-    df_merge['is_ice_pack'] = df_merge['Meal Sticker'] == 'Ice Pack'
-    df_merge = df_merge.sort_values(['Customer Name', 'Shipping Address 1', 'is_ice_pack'])
-
-    # Remove the temporary sorting column
-    df_merge = df_merge.drop('is_ice_pack', axis=1)
-
     # Simple groupby to create page-level information
     df_grouped = df_merge.groupby(['Customer Name', 'page_number']).agg({
         # Keep the first occurrence of these customer details per page
@@ -293,13 +260,15 @@ def process_data(db):
         # Combine these for each page
         'portion_str': lambda x: '\n\n'.join(x),
         'Meal Sticker': lambda x: '\n\n'.join(x),
+        'Customization Tags': 'first',
         
     }).reset_index()
 
     # Rename the aggregated columns to match expected names
     df_grouped.rename(columns={
         'portion_str': 'portion_list',
-        'Meal Sticker': 'dish_list'
+        'Meal Sticker': 'dish_list',
+        'Customization Tags': 'tags_list'
     }, inplace=True)
 
     # Create a unique client identifier
@@ -386,10 +355,26 @@ def process_data(db):
     df_merge_grouped['line_portion'] = df_merge_grouped.portion_list
     df_merge_grouped['line_nutrition'] = df_merge_grouped.NUTRITION
     df_merge_grouped['line_dishes'] = df_merge_grouped.dish_list
-    #number of items on the page (count dishes in dish_list, split by '\n\n')
-    df_merge_grouped['line_totalItems'] = df_merge_grouped['dish_list'].apply(lambda x: str(len(x.split('\n\n'))) + ' item(s)' if x else '0 item(s)')
+
+    # Calculate total items per household (excluding ice pack)
+    def count_dishes_excluding_ice_pack(dish_list):
+        """Count dishes in dish_list, excluding Ice Pack"""
+        if not dish_list:
+            return 0
+        dishes = dish_list.split('\n\n')
+        return len([dish for dish in dishes if 'Ice Pack' not in dish])
+
+    # Count total dishes per household
+    household_total_items = df_merge_grouped.groupby('HOUSEHOLD_GROUP').apply(
+        lambda group: sum(group['dish_list'].apply(count_dishes_excluding_ice_pack))
+    ).to_dict()
+
+    df_merge_grouped['line_totalItems'] = df_merge_grouped['HOUSEHOLD_GROUP'].map(
+        lambda household: 'Total ' + str(household_total_items.get(household, 0)) + ' dish(es)'
+    )
+
     #if has ice pack item, if so, mark true, otherwise false
-    df_merge_grouped['line_icePack'] = df_merge_grouped['dish_list'].apply(lambda x: 'Include ice pack' if 'Ice Pack' in str(x) else '')
+    df_merge_grouped['line_icePack'] = df_merge_grouped['tags_list'].apply(lambda x: 'Ice Pack Required' if ICE_PACK_TAG in str(x) else '')
     df_merge_grouped['line_zone'] = 'Zone ' + df_merge_grouped['ZONE_NUMBER']
     
     
