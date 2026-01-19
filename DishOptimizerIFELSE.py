@@ -11,7 +11,7 @@ MAX_SPECIAL_FRUIT_SNACK_DISH_VEGGIES_GRAM = 220
 MAX_VEGGIES_GRAM = 300
 MAX_STARCH_GRAM = 280
 MIN_STARCH_GRAM = 50
-MAX_PROTEIN_PER_TYPE = {"meat": 200, "fish": 220, "tofu": 350, "vegan": 200}
+MAX_PROTEIN_PER_TYPE = {"meat": 200, "fish": 220, "tofu": 250, "vegan": 200}
 
 class NewDishOptimizer:
     def __init__(self, grouped_ingredients, customer_requirements, nutrients, nutrient_constraints,
