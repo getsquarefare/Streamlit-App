@@ -3,8 +3,8 @@ numpy
 pandas
 pyarrow
 # Web framework and UI
-streamlit
-altair<5
+streamlit >= 1.50.0
+altair
 
 # File processing
 openpyxl
