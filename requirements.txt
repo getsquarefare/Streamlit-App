@@ -4,6 +4,7 @@ pandas
 pyarrow
 # Web framework and UI
 streamlit
+altair<5
 
 # File processing
 openpyxl
