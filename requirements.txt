@@ -22,4 +22,5 @@ brother_ql
 pillow
 python-barcode
 python-dotenv
+pytz
 tqdm
