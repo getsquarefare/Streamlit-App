@@ -26,8 +26,8 @@ def format_output_order_ingredients(db, deleted_ingredients, new_ingredients, fi
         
     try:
         # Process deleted ingredients
-        for ingredient_id in deleted_ingredients:
-            ingredient_details = db.get_ingredient_details_by_rec_id(ingredient_id)
+        for ingredient in deleted_ingredients:
+            ingredient_details = db.get_ingredient_details_by_rec_id(ingredient)
             if ingredient_details:
                 ingredient_name = ingredient_details['Ingredient Name']
                 ingredient_component = ingredient_details['Component']
@@ -46,13 +46,13 @@ def format_output_order_ingredients(db, deleted_ingredients, new_ingredients, fi
                         components_output[ingredient_component].append("NO " + ingredient_name.upper())
                     
         # Process new ingredients
-        for ingredient_id in new_ingredients:
-            ingredient_details = db.get_ingredient_details_by_rec_id(ingredient_id)
+        for ingredient in new_ingredients:
+            ingredient_details = db.get_ingredient_details_by_rec_id(ingredient)
             if ingredient_details:
                 ingredient_name = ingredient_details['Ingredient Name']
                 ingredient_component = ingredient_details['Component']
                 if ingredient_component in components_output:
-                    if ingredient_id in final_ingredients_not_in_recommend:
+                    if ingredient in final_ingredients_not_in_recommend:
                         components_output[ingredient_component].append(ingredient_name.upper()+"(✩)")
                     else:
                         components_output[ingredient_component].append(ingredient_name.upper())
@@ -104,12 +104,18 @@ def one_dish_output(db, dish_id):
         outputs.append(default_ingredients_formatted)
         
         for client_serving in ordered_clientservings:
-            deleted_ingredients = client_serving['fields'].get('All Deletions', [])
-            new_ingredients = client_serving['fields'].get('New Ingredients', [])
+            # deleted_ingredients = client_serving['fields'].get('All Deletions', [])
+            # new_ingredients = client_serving['fields'].get('New Ingredients', [])
             ingredients_to_recommend = client_serving['fields'].get('Ingredients To Recommend (from Linked OrderItem)', [])
-            final_ingredients_with_user_edits = client_serving['fields'].get('Final Ingredients With User Edits (from Linked OrderItem)', [])
+            final_ingredients_with_user_edits = client_serving['fields'].get('Final Ingredients with User Edits (from Linked OrderItem)', [])
             tags = client_serving['fields'].get('Customization Tags (from To_Match_Client_Nutrition) (from Linked OrderItem)', [])
-            
+            original_ingredients = client_serving['fields'].get('Original Ingredients (from Linked OrderItem)', [])
+
+            # Calculate deletions: in original but not in final, excluding meat/protein components
+            deleted_ingredients = [ingredient for ingredient in original_ingredients if ingredient not in final_ingredients_with_user_edits and db.get_ingredient_details_by_recId(ingredient)['Component'] not in ['Meat', 'Protein']]
+            #Calculate new ingredients: in final but not in original
+            new_ingredients = [ingredient for ingredient in final_ingredients_with_user_edits if ingredient not in original_ingredients]
+
             # Get deleted ingredient names
             deleted_ingredients_names = []
             for ingredient_id in deleted_ingredients:
@@ -119,9 +125,9 @@ def one_dish_output(db, dish_id):
 
             # Get ingredients in final ingredients but not in ingredients to recommend
             final_ingredients_not_in_recommend = []
-            for ingredient_id in final_ingredients_with_user_edits:
-                if ingredient_id not in ingredients_to_recommend:
-                    final_ingredients_not_in_recommend.append(ingredient_id)
+            for ingredient in final_ingredients_with_user_edits:
+                if ingredient not in ingredients_to_recommend:
+                    final_ingredients_not_in_recommend.append(ingredient)
             
             # Build output dictionary
             output = {
@@ -134,7 +140,8 @@ def one_dish_output(db, dish_id):
                 'Sticker': client_serving['fields'].get('Meal Sticker (from Linked OrderItem)', [''])[0],
                 #'Dish': client_serving['fields'].get('Dish', [''])[0],
                 'All Deletions': deleted_ingredients_names,
-                'Portions': 1
+                'Portions': 1,
+                'Original Ingredients': original_ingredients
             }
             
             # Get components output
