@@ -4,17 +4,33 @@ from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from datetime import datetime
 from dotenv import load_dotenv
-import streamlit as st
 from io import BytesIO
 import logging
 import ast
 import json
 from openai import OpenAI
-
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 import os
+
+# Initialize OpenAI client lazily to avoid issues when running outside Streamlit
+_openai_client = None
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        # Try streamlit secrets first, then environment variable
+        api_key = None
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("OPENAI_API_KEY")
+        except Exception:
+            pass
+        if not api_key:
+            api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
+
 from exceptions import AirTableError
-from store_access import new_database_access
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -60,16 +76,6 @@ def parse_modified_recipe_details(modified_recipe_text):
 def identify_fruits_with_openai(ingredient_names):
     """Use OpenAI to identify which ingredients are fruits"""
     try:
-        # Get OpenAI API key from environment or streamlit secrets
-        openai_api_key = st.secrets.get("OPENAI_API_KEY") if hasattr(st, 'secrets') else None
-        if not openai_api_key:
-            openai_api_key = os.getenv("OPENAI_API_KEY")
-
-        if not openai_api_key:
-            logger.warning("OpenAI API key not found, skipping fruit identification")
-            return set()
-
-
         # Create prompt for fruit identification
         prompt = f"""
         Given the following list of food ingredients, identify which ones are fruits.
@@ -79,9 +85,14 @@ def identify_fruits_with_openai(ingredient_names):
         
         Fruits:"""
 
+        client = get_openai_client()
+        if not client:
+            logger.warning("OpenAI client not available")
+            return set()
+
         response = client.responses.create(model="gpt-5-nano",
         input = prompt,
-        reasoning={ 
+        reasoning={
             "effort": "minimal"},
         text={
             "verbosity": "low"
@@ -122,7 +133,7 @@ def group_ingredients_by_component(db,client_servings):
         fields = serving['fields']
 
         # Get meal type from MEAL field
-        meal_field = fields.get('Meal Portion (from Linked OrderItem)', '')
+        meal_field = fields.get('MealType from Profile (from Linked OrderItem)', '')
          # Get the dish name
         dish_name = fields.get('Dish', ['Unknown'])[0] if fields.get('Dish') else 'Unknown'
 
@@ -133,7 +144,7 @@ def group_ingredients_by_component(db,client_servings):
             meal_type = meal_field if meal_field else ''
 
         if 'pre-set' in meal_type.lower() or 'add on' in meal_type.lower():
-            meal_type = fields.get('Meal Portion (from Linked OrderItem)', '')[0]
+            meal_type = fields.get('MealType from Profile (from Linked OrderItem)', '')[0]
 
         is_snack = 'snack' in meal_type.lower() 
         is_yogurt_breakfast = ('yogurt' in dish_name.lower() or 'parfait' in dish_name.lower()) and 'breakfast' in meal_type.lower()
@@ -358,6 +369,11 @@ def sort_breakfast_meats_with_openai(breakfast_meat_list):
 
         Sorted items:"""
 
+        client = get_openai_client()
+        if not client:
+            logger.warning("OpenAI client not available, falling back to alphabetical sort")
+            return sorted(breakfast_meat_list, key=lambda x: x[0])
+
         response = client.responses.create(
             model="gpt-5-nano",
             input=prompt,
@@ -416,6 +432,11 @@ def sort_meats_by_protein_type_with_openai(meat_list):
         {';'.join(meat_names)}
 
         Sorted items:"""
+
+        client = get_openai_client()
+        if not client:
+            logger.warning("OpenAI client not available, falling back to alphabetical sort")
+            return sorted(meat_list, key=lambda x: x[0])
 
         response = client.responses.create(
             model="gpt-5-nano",
@@ -910,6 +931,7 @@ def generate_to_make_sheet(db):
 
 
 if __name__ == "__main__":
+    from store_access import new_database_access
     try:
         db = new_database_access()  
         excel_file = generate_to_make_sheet(db)
