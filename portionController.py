@@ -551,7 +551,7 @@ class MealRecommendation:
                 main_dish_ingredients = [ing for ing in dish if ing["Component (from Ingredient)"][0].lower() not in ("sauce", "garnish") and ing["Component (from Ingredient)"][0].lower() == component.lower()]
                 if len(main_dish_ingredients) == 1:
                     default_grams = main_dish_ingredients[0]["Grams"]
-                elif len(main_dish_ingredients) > 1:
+                else:
                     default_grams = 5 if component == "Garnish" else 20 if component == "Sauce" else 50 if component == "Veggies" else 200
                 scale = default_grams / ingredient["Grams"]
                 ingredient['Kcal'] = ingredient["Energy (kcal)"] * scale
