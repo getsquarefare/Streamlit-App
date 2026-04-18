@@ -5,12 +5,12 @@ from tqdm import tqdm
 import pandas as pd
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from exceptions import AirtableDataError, PortioningError  # Import from new exceptions file
+from src.data.exceptions import AirtableDataError, PortioningError
 
 # Local imports
-from database import db  # Use the shared database instance
-from DishOptimizerLLM import LLMDishOptimizer
-from DishOptimizerIFELSE import NewDishOptimizer
+from src.data.database import db  # shared database instance
+from src.portioning.dish_optimizer_llm import LLMDishOptimizer
+from src.portioning.dish_optimizer_ifelse import NewDishOptimizer
 
 
 if __name__ == "__main__":

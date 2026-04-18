@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from functools import cache
 import streamlit as st
-from exceptions import AirTableError, AirtableDataError  # Import from new exceptions file
+from src.data.exceptions import AirTableError, AirtableDataError
 import logging
 
 # Set up logging

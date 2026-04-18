@@ -12,15 +12,15 @@ import streamlit as st
 from pptx import Presentation
 
 # Local application imports
-from portionController import MealRecommendation
-from shipping_sticker_generator import *
-from shipping_sticker_generator_v2 import *
-from dish_sticker_generator_airtable import *
-from dish_sticker_generator_barcode import *
-from one_pager_generator import *
-from store_access import new_database_access
-from clientservings_excel_output import *
-from to_make_sheet_generator import *
+from src.portioning.portion_controller import MealRecommendation
+from src.stickers.shipping_sticker_generator import *
+from src.stickers.shipping_sticker_generator_v2 import *
+from src.stickers.dish_sticker_generator_airtable import *
+from src.stickers.dish_sticker_generator_barcode import *
+from src.generators.one_pager_generator import *
+from src.data.store_access import new_database_access
+from src.generators.clientservings_excel_output import *
+from src.generators.to_make_sheet_generator import *
 
 # Streamlit app
 def main():

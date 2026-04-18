@@ -5,8 +5,8 @@ from math import ceil
 from io import BytesIO
 import logging
 import copy
-from exceptions import AirTableError
-from store_access import new_database_access
+from src.data.exceptions import AirTableError
+from src.data.store_access import new_database_access
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

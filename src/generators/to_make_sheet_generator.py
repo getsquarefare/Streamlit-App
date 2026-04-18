@@ -30,7 +30,7 @@ def get_openai_client():
             _openai_client = OpenAI(api_key=api_key)
     return _openai_client
 
-from exceptions import AirTableError
+from src.data.exceptions import AirTableError
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

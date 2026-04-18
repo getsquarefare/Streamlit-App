@@ -3,9 +3,9 @@ import pandas as pd
 from datetime import datetime
 from io import BytesIO
 import re
-from exceptions import AirTableError
+from src.data.exceptions import AirTableError
 import logging
-from store_access import new_database_access
+from src.data.store_access import new_database_access
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

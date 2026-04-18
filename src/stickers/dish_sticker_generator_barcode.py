@@ -19,7 +19,7 @@ from pptx import Presentation
 from pptx.util import Inches
 from pyairtable.api.table import Table
 import streamlit as st
-from store_access import new_database_access
+from src.data.store_access import new_database_access
 import gc
 
 # Local imports
