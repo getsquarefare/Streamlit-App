@@ -415,13 +415,19 @@ class MealRecommendation:
             "Total Fiber (g)": total_fiber,
         }
 
-    def generate_recommendations_with_thread(self):
+    def generate_recommendations_with_thread(self, cancel_event=None, progress=None):
         #self.db.delete_all_clientservings() # only when reset
         open_orders = self.db.get_all_open_orders_for_portioning()
         finishedCount = 0
         failedCount = 0
         failedCases = []
-        
+
+        if progress is not None:
+            progress["status"] = "Loading open orders…"
+            progress["done"] = 0
+            progress["failed"] = 0
+            progress["total"] = 0
+
         try:
             client_dish_pairs = self.build_client_dish_mapping(
                 open_orders,
@@ -433,13 +439,17 @@ class MealRecommendation:
                 skip_portioning_column="Skip Portioning"
             )
             protein_type_mapping = self.db.get_protein_group_mapping()
-            
+
+            if progress is not None:
+                progress["total"] = len(client_dish_pairs)
+                progress["status"] = "Submitting orders to optimizer…"
+
             # Create a ThreadPoolExecutor to run tasks concurrently
             with ThreadPoolExecutor(max_workers=5) as executor:
                 try:
                     future_to_pair = {
-                        executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning, protein_type_mapping): 
-                        (shopify_id, client_id, dish_id) 
+                        executor.submit(self.process_recommendation, shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning, protein_type_mapping):
+                        (shopify_id, client_id, dish_id)
                         for shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning in client_dish_pairs
                     }
                 except Exception as e:
@@ -448,20 +458,34 @@ class MealRecommendation:
                     failedCases.append(f"Error creating futures: {error_message}")
 
                 for future in as_completed(future_to_pair):
+                    if cancel_event is not None and cancel_event.is_set():
+                        # Drop any pending work and stop waiting on in-flight futures.
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        failedCases.append("Cancelled by user — returning partial results")
+                        break
                     shopify_id, client_id, dish_id = future_to_pair[future]
                     try:
                         future.result()
                         finishedCount += 1
+                        if progress is not None:
+                            progress["done"] = finishedCount
+                            progress["status"] = f"Order {shopify_id} done"
                     except PortioningError as pe:
                         # Handle portioning errors specifically
                         error_message = str(pe)
                         failedCount += 1
                         failedCases.append(f"Portioning error for order {shopify_id}: {error_message}")
+                        if progress is not None:
+                            progress["failed"] = failedCount
+                            progress["status"] = f"Order {shopify_id} failed"
                     except Exception as e:
                         # Handle any other exceptions
                         error_message = str(e)
                         failedCount += 1
                         failedCases.append(f"Error processing recommendation for open order {shopify_id}: {error_message}")
+                        if progress is not None:
+                            progress["failed"] = failedCount
+                            progress["status"] = f"Order {shopify_id} failed"
         except AirtableDataError as ade:
             # Handle Airtable data errors specifically
             error_message = str(ade)

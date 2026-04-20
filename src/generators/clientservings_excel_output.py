@@ -195,7 +195,7 @@ def generate_formatted_clientservings_onedish(clientservings):
         logger.error(f"Error formatting client servings data: {str(e)}")
         raise AirTableError(f"Error formatting client servings data: {str(e)}")
 
-def consolidated_all_dishes_output(db):
+def consolidated_all_dishes_output(db, progress=None):
     """Consolidate output for all dishes"""
     try:
         all_clientservings = db.clientserving_table.all(fields=['Dish ID (from Linked OrderItem)'],view='viwgt50kLisz8jx7b')
@@ -203,26 +203,32 @@ def consolidated_all_dishes_output(db):
             raise AirTableError("No clientservings found in the source view. Please check the view and try again.")
         all_dishes = set()
         all_output = pd.DataFrame()
-        
+
         # Collect all unique dish IDs
         for client_serving in all_clientservings:
             dish_ids = client_serving['fields'].get('Dish ID (from Linked OrderItem)', [])
             if dish_ids:
                 all_dishes.add(dish_ids[0])
         all_dishes = sorted(all_dishes)
+        if progress is not None:
+            progress["total"] = len(all_dishes)
+            progress["done"] = 0
         # Process each dish
-        for dish_id in all_dishes:
+        for idx, dish_id in enumerate(all_dishes, start=1):
             result = one_dish_output(db, dish_id)
             result_df = generate_formatted_clientservings_onedish(result)
             all_output = pd.concat([all_output, result_df], axis=0, ignore_index=True)
-            
+            if progress is not None:
+                progress["done"] = idx
+                progress["status"] = f"Dish {dish_id}"
+
         return all_output
     except Exception as e:
         logger.error(f"Error consolidating all dishes output: {str(e)}")
         raise AirTableError(f"Error consolidating all dishes output: {str(e)}")
 
-def generate_clientservings_excel(db):
-    formatted_clientservings = consolidated_all_dishes_output(db)
+def generate_clientservings_excel(db, progress=None):
+    formatted_clientservings = consolidated_all_dishes_output(db, progress=progress)
     """Generate Excel file with formatted client servings data"""
     try:
         current_date = datetime.now().strftime("%Y%m%d")

@@ -21,6 +21,7 @@ from src.generators.one_pager_generator import *
 from src.data.store_access import new_database_access
 from src.generators.clientservings_excel_output import *
 from src.generators.to_make_sheet_generator import *
+from src.utils.cancellable import CancellableTask
 
 # Streamlit app
 def main():
@@ -64,58 +65,119 @@ def main():
     with st.expander('Expand to see more details'):
         st.markdown("⚠️ Please first confirm :red[Open Orders] are :red[reviewed] and :red[approved]")
         st.markdown("⚠️ Currently :red[only] orders included in :red[this view] will be processed: [Open Orders > Running Portioning](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwrZHgdsYWnAMhtX?blocks=hide)")
-        portion_generate_button = st.button("Yeh! Run Portioning Now")
-        if portion_generate_button:
-            # Display spinner and timer
-            with st.spinner('Running the portioning algorithm... 🕐'):
-                start_time = time.time()  # Record start time
-                meal_recommendation = MealRecommendation()
-                finishedCount, failedCount, failedCases = meal_recommendation.generate_recommendations_with_thread()
-                end_time = time.time()
-                elapsed_time = end_time - start_time
-                elapsed_time_str = str(timedelta(seconds=elapsed_time))
-                elapsed_time_str = elapsed_time_str.split(".")[0] + "." + elapsed_time_str.split(".")[1][:2]
-            st.success(f"{finishedCount} orders completed in {elapsed_time_str}! ✅")
-            if len(failedCases) > 0:
-                if failedCount > 0:
-                    st.error(f"{failedCount} orders failed to process. Please review the following cases:")
-                    st.write(failedCases)
+
+        portion_task = st.session_state.get("portion_task")
+
+        if portion_task is not None and not portion_task.is_done():
+            # A run is in progress — show Cancel + live status, poll via rerun.
+            progress = st.session_state.get("portion_progress", {})
+            elapsed_str = str(timedelta(seconds=int(portion_task.elapsed())))
+            cancel_requested = portion_task.is_cancelled()
+            done_count = progress.get("done", 0)
+            failed_count = progress.get("failed", 0)
+            total_count = progress.get("total", 0)
+            status = progress.get("status", "Starting…")
+
+            col_cancel, col_status = st.columns([1, 3])
+            with col_cancel:
+                if cancel_requested:
+                    st.button("Cancelling…", disabled=True, key="portion_cancel_disabled")
                 else:
-                    st.error("Portioning stopped half way through, please correct the following cases and re-run the algorithm:")
-                    st.write(failedCases)
+                    if st.button("Cancel Portioning", key="portion_cancel"):
+                        portion_task.cancel()
+                        st.rerun()
+            with col_status:
+                if total_count:
+                    detail = f"{done_count}/{total_count} orders done"
+                    if failed_count:
+                        detail += f" ({failed_count} failed)"
+                    detail += f" — {status}"
+                else:
+                    detail = status
+                if cancel_requested:
+                    st.warning(f"Cancelling — waiting for in-flight orders to wrap up… ({elapsed_str}) | {detail}")
+                else:
+                    st.info(f"Running portioning algorithm… 🕐 {elapsed_str} | {detail}")
+
+            # Poll: sleep briefly then rerun until task finishes.
+            time.sleep(1)
+            st.rerun()
+        else:
+            if portion_task is not None and portion_task.is_done():
+                elapsed_str = str(timedelta(seconds=int(portion_task.elapsed())))
+                if portion_task.error is not None:
+                    st.error(f"Portioning failed: {portion_task.error}")
+                else:
+                    finishedCount, failedCount, failedCases = portion_task.result
+                    if portion_task.is_cancelled():
+                        st.warning(f"Portioning cancelled after {elapsed_str}. {finishedCount} orders completed before cancellation.")
+                    else:
+                        st.success(f"{finishedCount} orders completed in {elapsed_str}! ✅")
+                    if len(failedCases) > 0:
+                        if failedCount > 0:
+                            st.error(f"{failedCount} orders failed to process. Please review the following cases:")
+                            st.write(failedCases)
+                        else:
+                            st.error("Portioning stopped half way through, please correct the following cases and re-run the algorithm:")
+                            st.write(failedCases)
+
+            if st.button("Yeh! Run Portioning Now"):
+                meal_recommendation = MealRecommendation()
+                progress = {"status": "Starting…", "done": 0, "failed": 0, "total": 0}
+                st.session_state.portion_progress = progress
+                task = CancellableTask(meal_recommendation.generate_recommendations_with_thread, progress=progress)
+                task.start()
+                st.session_state.portion_task = task
+                st.rerun()
 
     # clientservings csv download
     st.header(':green[ClientServings Excel] 📑')
     with st.expander('Expand to see more details'):
         st.markdown("⚠️ Source Table: [Clientservings > For Clientservings Excel Output](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viwgt50kLisz8jx7b?blocks=hide)")
         st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
-        clientservings_generate_button = st.button("Get ClientServings")
 
-        if clientservings_generate_button:
-            try:
-                with st.spinner('Generating clientservings... It may take a few minutes 🕐'):
+        clientservings_task = st.session_state.get("clientservings_task")
+
+        if clientservings_task is not None and not clientservings_task.is_done():
+            progress = st.session_state.get("clientservings_progress", {})
+            elapsed_str = str(timedelta(seconds=int(clientservings_task.elapsed())))
+            done = progress.get("done", 0)
+            total = progress.get("total", 0)
+            status = progress.get("status", "Starting…")
+            detail = f"{done}/{total} dishes — {status}" if total else status
+            st.info(f"Generating ClientServings Excel… 🕐 {elapsed_str} | {detail}")
+            time.sleep(1)
+            st.rerun()
+        else:
+            if clientservings_task is not None and clientservings_task.is_done():
+                elapsed_str = str(timedelta(seconds=int(clientservings_task.elapsed())))
+                err = clientservings_task.error
+                if err is not None:
+                    if isinstance(err, AirTableError):
+                        st.error(f"Error generating ClientServings Excel: {err}")
+                    else:
+                        st.error("An unexpected error occurred. Please check the data in source table and try again.")
+                        with st.expander("Technical Error Details (for debugging)"):
+                            st.code("".join(traceback.format_exception(type(err), err, err.__traceback__)))
+                else:
+                    excel_data = clientservings_task.result
                     clientservings_excel_name = f'{current_date_time}_clientservings.xlsx'
-                    excel_data = generate_clientservings_excel(db)
+                    st.download_button(
+                        label="Download ClientServings Excel",
+                        data=excel_data,
+                        file_name=clientservings_excel_name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="clientservings_download"
+                    )
+                    st.success(f"Excel file generated successfully in {elapsed_str}!")
 
-                # Allow the user to download the file
-                st.download_button(
-                    label="Download ClientServings Excel",
-                    data=excel_data,
-                    file_name=clientservings_excel_name,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-                
-                # Success message
-                st.success("Excel file generated successfully!")
-                
-            except AirTableError as e:
-                # Handle specific AirTable errors
-                st.error(f"Error generating ClientServings Excel: {str(e)}")
-                logging.error(f"AirTable error: {str(e)}")
-                
-            except Exception as e:
-                # Handle unexpected errors
-                st.error("An unexpected error occurred. Please check the data in source table and try again.")
+            if st.button("Get ClientServings"):
+                progress = {"status": "Starting…", "done": 0, "total": 0}
+                st.session_state.clientservings_progress = progress
+                task = CancellableTask(lambda cancel_event=None: generate_clientservings_excel(db, progress=progress))
+                task.start()
+                st.session_state.clientservings_task = task
+                st.rerun()
 
 
     # shipping_sticker_generator_v1
@@ -423,40 +485,82 @@ def main():
 
         # Generate button for Barcode stickers
         st.markdown("⚠️ Make sure you grouped orders by Dish ID and generate position id in Airtable, before running this generator")
-        qr_dish_sticker_generate_button = st.button("I have applied position id, lets get Barcode Dish Stickers")
-        
-        if qr_dish_sticker_generate_button:
-            try:
-                with st.spinner('Generating Barcode dish stickers... It may take a few minutes 🕐'):
-                    # Check if the presentation has slides
-                    if len(qr_prs_file.slides) == 0:
-                        st.error("The Barcode template contains no slides. Please use a valid template.")
-                        st.stop()
 
-                    qr_updated_ppt_name = f'{current_date_time}_dish_sticker_barcode.pptx'
-                    progress_placeholder = st.empty()
-                    prs = generate_dish_stickers_barcode(db, progress_placeholder=progress_placeholder)
-                    progress_placeholder.empty()  # Clear progress text when done
-                    prs.save(qr_updated_ppt_name)
-                    
-                    # Check if file was created successfully
-                    if os.path.exists(qr_updated_ppt_name):
-                        st.success(f"Successfully generated Barcode dish stickers!")
-                        
-                        # Provide download button
-                        with open(qr_updated_ppt_name, "rb") as file:
+        barcode_task = st.session_state.get("barcode_task")
+
+        if barcode_task is not None and not barcode_task.is_done():
+            # Running — show Cancel + live status, poll via rerun.
+            progress = st.session_state.get("barcode_progress", {})
+            elapsed_str = str(timedelta(seconds=int(barcode_task.elapsed())))
+            cancel_requested = barcode_task.is_cancelled()
+            slide_count = progress.get("slide_count", 0)
+            total_slides = progress.get("total_slides", 0)
+            status = progress.get("status", "Starting…")
+
+            col_cancel, col_status = st.columns([1, 3])
+            with col_cancel:
+                if cancel_requested:
+                    st.button("Cancelling…", disabled=True, key="barcode_cancel_disabled")
+                else:
+                    if st.button("Cancel Barcode Stickers", key="barcode_cancel"):
+                        barcode_task.cancel()
+                        st.rerun()
+            with col_status:
+                detail = f"{slide_count}/{total_slides} slides — {status}" if total_slides else status
+                if cancel_requested:
+                    st.warning(f"Cancelling — finishing current slide… ({elapsed_str}) | {detail}")
+                else:
+                    st.info(f"Generating Barcode dish stickers… 🕐 {elapsed_str} | {detail}")
+
+            time.sleep(1)
+            st.rerun()
+        else:
+            if barcode_task is not None and barcode_task.is_done():
+                elapsed_str = str(timedelta(seconds=int(barcode_task.elapsed())))
+                if barcode_task.error is not None:
+                    st.error(f"Unexpected error during Barcode sticker generation: {barcode_task.error}")
+                    with st.expander("Technical Error Details (for debugging)"):
+                        st.code("".join(traceback.format_exception(type(barcode_task.error), barcode_task.error, barcode_task.error.__traceback__)))
+                else:
+                    prs = barcode_task.result
+                    # Save the presentation once per completed task.
+                    saved_path = st.session_state.get("barcode_saved_path")
+                    if saved_path is None and prs is not None:
+                        saved_path = f'{current_date_time}_dish_sticker_barcode.pptx'
+                        prs.save(saved_path)
+                        st.session_state.barcode_saved_path = saved_path
+
+                    progress = st.session_state.get("barcode_progress", {})
+                    slide_count = progress.get("slide_count", 0)
+                    total_slides = progress.get("total_slides", 0)
+
+                    if barcode_task.is_cancelled():
+                        st.warning(f"Cancelled after {elapsed_str} — {slide_count}/{total_slides} slides completed. Partial file saved.")
+                    else:
+                        st.success(f"Successfully generated Barcode dish stickers in {elapsed_str}!")
+
+                    if saved_path is not None and os.path.exists(saved_path):
+                        with open(saved_path, "rb") as file:
                             st.download_button(
                                 label="Download Barcode Stickers",
                                 data=file,
-                                file_name=qr_updated_ppt_name,
-                                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                                file_name=saved_path,
+                                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                key="barcode_download"
                             )
-                    else:
-                        st.error("Failed to generate Barcode stickers. Please check the error messages above.")
-                        
-            except Exception as e:
-                st.error(f"Unexpected error during Barcode sticker generation: {str(e)}")
-                st.exception(e)
+
+            if st.button("I have applied position id, lets get Barcode Dish Stickers"):
+                if len(qr_prs_file.slides) == 0:
+                    st.error("The Barcode template contains no slides. Please use a valid template.")
+                    st.stop()
+                # Clear prior task state so a fresh run doesn't reuse old saved file / progress.
+                st.session_state.pop("barcode_saved_path", None)
+                progress = {"status": "Starting…", "slide_count": 0, "total_slides": 0}
+                st.session_state.barcode_progress = progress
+                task = CancellableTask(generate_dish_stickers_barcode, db, progress=progress)
+                task.start()
+                st.session_state.barcode_task = task
+                st.rerun()
 
     # one_pager_generator
     st.header('One-Sheeter - Airtable 📑')
@@ -471,73 +575,97 @@ def main():
         #                                         help="Include instruction slide as second slide")
 
         st.markdown("⚠️ Please make sure all meal stickers are generated before running this one-sheeter generator")
-        # Generate button
-        one_sheeter_generate_button = st.button("Yes I ran the meal sticker already, now lets generate One-Sheeter")
 
-        if one_sheeter_generate_button:
-            with st.spinner('Generating One-Sheeter... It may take a few minutes 🕐'):
-                # Save uploaded files temporarily if needed
-                template_path = 'template/One_Pager_Template_v2.pptx'  # Default path
-                
-                # if new_one_pager_template is not None:
-                #     template_path = new_one_pager_template
-                
-                # Load template
+        one_sheeter_task = st.session_state.get("one_sheeter_task")
+
+        if one_sheeter_task is not None and not one_sheeter_task.is_done():
+            progress = st.session_state.get("one_sheeter_progress", {})
+            elapsed_str = str(timedelta(seconds=int(one_sheeter_task.elapsed())))
+            done = progress.get("done", 0)
+            total = progress.get("total", 0)
+            status = progress.get("status", "Starting…")
+            detail = f"{done}/{total} pages — {status}" if total else status
+            st.info(f"Generating One-Sheeter… 🕐 {elapsed_str} | {detail}")
+            time.sleep(1)
+            st.rerun()
+        else:
+            if one_sheeter_task is not None and one_sheeter_task.is_done():
+                elapsed_str = str(timedelta(seconds=int(one_sheeter_task.elapsed())))
+                err = one_sheeter_task.error
+                if err is not None:
+                    st.error(f"Error generating One-Sheeter: {err}")
+                    with st.expander("Technical Error Details (for debugging)"):
+                        st.code("".join(traceback.format_exception(type(err), err, err.__traceback__)))
+                else:
+                    prs = one_sheeter_task.result
+                    saved_path = st.session_state.get("one_sheeter_saved_path")
+                    if saved_path is None and prs is not None:
+                        saved_path = f'{current_date_time}_one_sheeter.pptx'
+                        prs.save(saved_path)
+                        st.session_state.one_sheeter_saved_path = saved_path
+
+                    if saved_path is not None and os.path.exists(saved_path):
+                        with open(saved_path, "rb") as file:
+                            st.download_button(
+                                label="Download One-Sheeter",
+                                data=file,
+                                file_name=saved_path,
+                                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                key="one_sheeter_download"
+                            )
+                    st.success(f"One-Sheeter generated successfully in {elapsed_str}!")
+
+            if st.button("Yes I ran the meal sticker already, now lets generate One-Sheeter"):
+                template_path = 'template/One_Pager_Template_v2.pptx'
                 prs_file = Presentation(template_path)
-                # Check if template has at least 2 slides (display warning if not)
                 if len(prs_file.slides) < 2:
                     st.warning("Your template should include an instruction slide as the second slide. Proceeding without instructions.")
-                
-                # Generate one pagers (no background parameter)
-                prs = generate_one_pagers(db,template_path)
-                
-                updated_ppt_name = f'{current_date_time}_one_sheeter.pptx'
-                prs.save(updated_ppt_name)
-                
-            # Provide download link
-            with open(updated_ppt_name, "rb") as file:
-                st.download_button(
-                    label="Download One-Sheeter",
-                    data=file,
-                    file_name=updated_ppt_name,
-                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                )
-            
-            st.success("One-Sheeter generated successfully!")
+                st.session_state.pop("one_sheeter_saved_path", None)
+                progress = {"status": "Starting…", "done": 0, "total": 0}
+                st.session_state.one_sheeter_progress = progress
+                task = CancellableTask(lambda cancel_event=None: generate_one_pagers(db, template_path, progress=progress))
+                task.start()
+                st.session_state.one_sheeter_task = task
+                st.rerun()
 
     # to_make_sheet_generator
     st.header('To-Make Sheet Generator 🍳')
     with st.expander('Expand to see more details'):
         st.markdown("⚠️ Source Table: [Clientservings > For To-Make Sheet](https://airtable.com/appEe646yuQexwHJo/tblVwpvUmsTS2Se51/viw4WN1XsjMnHwMkt?blocks=hide)")
 
-        # Generate button
-        to_make_sheet_generate_button = st.button("Generate To-Make Sheet")
-        
-        if to_make_sheet_generate_button:
-            try:
-                with st.spinner('Generating to-make sheet... It may take a few minutes 🕐'):
-                    # Import the generator
-    
-                    excel_file = generate_to_make_sheet(db)
+        to_make_sheet_task = st.session_state.get("to_make_sheet_task")
 
+        if to_make_sheet_task is not None and not to_make_sheet_task.is_done():
+            elapsed_str = str(timedelta(seconds=int(to_make_sheet_task.elapsed())))
+            st.info(f"Generating To-Make Sheet… 🕐 {elapsed_str}")
+            time.sleep(1)
+            st.rerun()
+        else:
+            if to_make_sheet_task is not None and to_make_sheet_task.is_done():
+                elapsed_str = str(timedelta(seconds=int(to_make_sheet_task.elapsed())))
+                err = to_make_sheet_task.error
+                if err is not None:
+                    st.error(f"Error generating to-make sheet: {err}")
+                    st.info("Please check the source table data and try again")
+                    with st.expander("Technical Error Details (for debugging)"):
+                        st.code("".join(traceback.format_exception(type(err), err, err.__traceback__)))
+                else:
+                    excel_file = to_make_sheet_task.result
                     updated_xlsx_name = f'{current_date_time}_to_make_sheet.xlsx'
-                    
-                    # Provide download button
                     st.download_button(
                         label="Download To-Make Sheet",
                         data=excel_file.getvalue(),
                         file_name=updated_xlsx_name,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="to_make_sheet_download"
                     )
-                    
-                    st.success("To-Make Sheet generated successfully!")
-                    
-            except Exception as e:
-                st.error(f"Error generating to-make sheet: {str(e)}")
-                st.info("Please check the source table data and try again")
-                # Show technical details in an expander for debugging
-                with st.expander("Technical Error Details (for debugging)"):
-                    st.code(traceback.format_exc())
+                    st.success(f"To-Make Sheet generated successfully in {elapsed_str}!")
+
+            if st.button("Generate To-Make Sheet"):
+                task = CancellableTask(lambda cancel_event=None: generate_to_make_sheet(db))
+                task.start()
+                st.session_state.to_make_sheet_task = task
+                st.rerun()
 
 if __name__ == "__main__":
     main()

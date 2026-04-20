@@ -243,13 +243,16 @@ def copy_slide(template, prs):
 
     return new_slide
 
-def generate_dish_stickers_barcode(db, progress_placeholder=None):
+def generate_dish_stickers_barcode(db, progress_placeholder=None, cancel_event=None, progress=None):
     """
     Generate dish stickers with barcode.
 
     Args:
         db: Database access object
-        progress_placeholder: Optional Streamlit placeholder for progress updates
+        progress_placeholder: Optional Streamlit placeholder for progress updates (sync use)
+        cancel_event: Optional threading.Event — when set, stop generating and return partial prs
+        progress: Optional dict — status / slide_count / total_slides are written here for the
+            caller to read from another thread (avoids st.* calls from a worker)
     """
     client_serving_df = read_client_serving(db)
     print(client_serving_df.head())
@@ -273,6 +276,9 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None):
     max_parts = df['parts'].max()
     total_slides = df['parts'].sum()
     print(f"Max parts: {max_parts}, Total rows: {len(df)}, Total slides to generate: {total_slides}")
+    if progress is not None:
+        progress["total_slides"] = int(total_slides)
+        progress["slide_count"] = 0
 
     slide_count = 0
     # Iterate by part number first (all Part 1s, then all Part 2s, etc.)
@@ -282,12 +288,18 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None):
         print(f"Part {part_num + 1}: processing {len(rows_with_part)} rows")
 
         for idx, row in rows_with_part.iterrows():
+            if cancel_event is not None and cancel_event.is_set():
+                return prs
             slide_count += 1
             if slide_count % 20 == 0:
                 gc.collect()
 
             status_msg = f"Slide {slide_count}/{total_slides} - {row['client_name']} ({row['#']})"
             print(f"  {status_msg}")
+
+            if progress is not None:
+                progress["status"] = status_msg
+                progress["slide_count"] = slide_count
 
             # Update Streamlit progress if placeholder provided
             if progress_placeholder is not None:

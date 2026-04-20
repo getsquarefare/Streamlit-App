@@ -535,7 +535,7 @@ def insert_instruction_sheet(prs, instruction_template_path=None):
 
     return prs
 
-def generate_ppt(df, template_path):
+def generate_ppt(df, template_path, progress=None):
     prs = Presentation(template_path)
     df.sort_values(by=['HOUSEHOLD_MEMBERS', 'is_shipping_contact', 'Shipping Name'], ascending=[True, False, True],inplace=True)
     #print(df[['HOUSEHOLD_MEMBERS','is_shipping_contact','Shipping Name']])
@@ -556,8 +556,12 @@ def generate_ppt(df, template_path):
 
     current_household = None
 
+    if progress is not None:
+        progress["total"] = len(df)
+        progress["done"] = 0
+
     # Iterate each row in df_merge
-    for index, row in df.iterrows():
+    for page_idx, (index, row) in enumerate(df.iterrows(), start=1):
         # If we're changing households and there's an instruction slide, add a copy of it
         if current_household is not None and current_household != row['HOUSEHOLD_GROUP'] and instruction_slide is not None:
             # Add the instruction slide between households
@@ -572,11 +576,15 @@ def generate_ppt(df, template_path):
         # parse the text to the template slide
         for shape in new_slide.shapes:
             if shape.shape_type == text_type and shape.has_text_frame:
-                key = shape.name 
+                key = shape.name
                 if shape.has_text_frame:
                     text_frame = shape.text_frame
                     if text_frame.paragraphs and text_frame.paragraphs[0].runs:
                         text_frame.paragraphs[0].runs[0].text = row[key]
+
+        if progress is not None:
+            progress["done"] = page_idx
+            progress["status"] = f"{row.get('Shipping Name', '')}".strip() or f"Page {page_idx}"
 
     copy_slide_with_images(instruction_slide, prs)
     # Remove the template slides (first N slides)
@@ -587,13 +595,13 @@ def generate_ppt(df, template_path):
 
     return prs
 
-def generate_one_pagers(db,template_path):
+def generate_one_pagers(db, template_path, progress=None):
 
     # Process data from Airtable
     processed_data = process_data(db)
     # processed_data.to_excel("output.xlsx", index=False)
     # Generate PowerPoint
-    prs = generate_ppt(processed_data, template_path)
+    prs = generate_ppt(processed_data, template_path, progress=progress)
 
     return prs
 
