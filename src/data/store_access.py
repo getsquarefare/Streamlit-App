@@ -23,7 +23,8 @@ class AirTable():
         
         # Get the API key from environment variables or the passed argument
         self.api_key = ex_api_key or st.secrets["AIRTABLE_API_KEY"]
-        self.base_id = "appEe646yuQexwHJo"
+        # self.base_id = "appEe646yuQexwHJo"
+        self.base_id = "app5yeJyi45XcSFTN"
         
         # Initialize tables
         self.ingredients_table = Table(self.api_key, self.base_id, 'tblPhcO06ce4VcAPD')
