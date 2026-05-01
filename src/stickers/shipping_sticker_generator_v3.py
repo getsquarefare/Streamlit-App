@@ -23,7 +23,6 @@ from src.stickers.dish_barcode_ids import dish_barcode_from_open_order_fields
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# VIEW = "viwDpTtU0qaT9NcvG"
 VIEW = "viwDpTtU0qaT9NcvG"
 
 
