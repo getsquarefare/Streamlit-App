@@ -342,34 +342,50 @@ def generate_bag_stickers_barcode(
         prs.part.drop_rel(r_id)
         del prs.slides._sldIdLst[0]
 
-    if export_mapping_path:
-        mapping = []
-        for _, row in df.iterrows():
-            mapping.append(
-                {
-                    "bagBarcode": row["BAG_BARCODE"],
-                    "deliveryDate": row["Delivery Date"],
-                    "shippingName": row["Shipping Name"],
-                    "address1": row["Shipping Address 1"],
-                    "address2": row["Shipping Address 2"],
-                    "city": row["Shipping City"],
-                    "province": row["Shipping Province"],
-                    "postalCode": row["Shipping Postal Code"],
-                    "zone": row["ZONE_NUMBER"],
-                    "householdMembers": row["HOUSEHOLD_MEMBERS"].split("\n"),
-                    "icePackRequired": bool(row["ICE_PACK_REQUIRED"]),
-                    "totalItems": int(row["TOTAL_ITEMS"]),
-                    "dishes": row.get("DISH_OBJECTS")
-                    or [
-                        dish.strip()
-                        for dish in str(row["DISH_LIST"]).split("\n\n")
-                        if dish.strip()
-                    ],
-                }
-            )
+    mapping = []
+    for _, row in df.iterrows():
+        dishes = row.get("DISH_OBJECTS") or [
+            dish.strip()
+            for dish in str(row["DISH_LIST"]).split("\n\n")
+            if dish.strip()
+        ]
+        mapping.append(
+            {
+                "bagBarcode": row["BAG_BARCODE"],
+                "deliveryDate": row["Delivery Date"],
+                "shippingName": row["Shipping Name"],
+                "address1": row["Shipping Address 1"],
+                "address2": row["Shipping Address 2"],
+                "city": row["Shipping City"],
+                "province": row["Shipping Province"],
+                "postalCode": row["Shipping Postal Code"],
+                "zone": row["ZONE_NUMBER"],
+                "householdMembers": row["HOUSEHOLD_MEMBERS"].split("\n"),
+                "icePackRequired": bool(row["ICE_PACK_REQUIRED"]),
+                "totalItems": int(row["TOTAL_ITEMS"]),
+                "dishes": dishes,
+            }
+        )
 
+    if export_mapping_path:
         with open(export_mapping_path, "w") as f:
             json.dump(mapping, f, indent=2)
+
+    # Write each bag to the Airtable Bag Tracking table.
+    for entry in mapping:
+        dish_ids = [
+            str(d["dishBarcode"])
+            for d in entry["dishes"]
+            if isinstance(d, dict) and d.get("dishBarcode")
+        ]
+        try:
+            db.upsert_bag_record(
+                bag_barcode=entry["bagBarcode"],
+                dish_ids=dish_ids,
+                ice_pack_required=entry["icePackRequired"],
+            )
+        except Exception as e:
+            print(f"⚠️ Could not write bag {entry['bagBarcode']} to Airtable: {e}")
 
     return prs, df
 
