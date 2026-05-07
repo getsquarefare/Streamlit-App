@@ -15,6 +15,7 @@ from pptx import Presentation
 from src.portioning.portion_controller import MealRecommendation
 from src.stickers.shipping_sticker_generator import *
 from src.stickers.shipping_sticker_generator_v2 import *
+from src.stickers.shipping_sticker_generator_v3 import generate_shipping_stickers_barcode
 from src.stickers.dish_sticker_generator_airtable import *
 from src.stickers.dish_sticker_generator_barcode import *
 from src.generators.one_pager_generator import *
@@ -100,7 +101,7 @@ def main():
                     st.info(f"Running portioning algorithm… 🕐 {elapsed_str} | {detail}")
 
             # Poll: sleep briefly then rerun until task finishes.
-            time.sleep(1)
+            time.sleep(2)
             st.rerun()
         else:
             if portion_task is not None and portion_task.is_done():
@@ -146,7 +147,7 @@ def main():
             status = progress.get("status", "Starting…")
             detail = f"{done}/{total} dishes — {status}" if total else status
             st.info(f"Generating ClientServings Excel… 🕐 {elapsed_str} | {detail}")
-            time.sleep(1)
+            time.sleep(2)
             st.rerun()
         else:
             if clientservings_task is not None and clientservings_task.is_done():
@@ -351,6 +352,61 @@ def main():
                 with st.expander("Technical Error Details (for debugging)"):
                     st.code(traceback.format_exc())
 
+    # shipping_sticker_generator_v3 (Airtable + Barcode)
+    st.header(':blue[Shipping Sticker] - Airtable + Barcode 🚚')
+    with st.expander('Expand to see more details'):
+        st.markdown("⚠️ Source Table: [Open Orders > For Shipping Stickers](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwDpTtU0qaT9NcvG?blocks=hide)")
+        st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
+
+        template_path_v3 = 'template/Shipping_Sticker_Template.pptx'
+
+        if os.path.exists(template_path_v3):
+            with open(template_path_v3, "rb") as template_file:
+                st.download_button(
+                    label="⬇️ Download Existing Template",
+                    data=template_file,
+                    file_name="Shipping_Sticker_Template.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    key="download_shipping_template_v3"
+                )
+        else:
+            st.warning(f"⚠️ Default template not found at {template_path_v3}")
+
+        shipping_sticker_v3_generate_button = st.button("Generate Shipping Stickers with Barcode")
+
+        if shipping_sticker_v3_generate_button:
+            try:
+                with st.spinner('Generating shipping stickers with barcode... It may take a few minutes 🕐'):
+                    ppt_file, shipping_list = generate_shipping_stickers_barcode(db)
+
+                    if ppt_file:
+                        updated_ppt_name = f'{current_date_time}_shipping_sticker_barcode.pptx'
+
+                        st.download_button(
+                            label="Download Stickers",
+                            data=ppt_file.getvalue(),
+                            file_name=updated_ppt_name,
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            key="shipping_sticker_v3_download"
+                        )
+
+                        st.success(f"✅ Successfully generated shipping stickers with barcode for {len(shipping_list)} unique bag records!")
+                    else:
+                        st.warning("⚠️ No stickers were generated. Please check if there are any open orders in Airtable.")
+            except AirTableError as e:
+                st.error(f"⚠️ Airtable Connection Error: {str(e)}")
+                st.info("Please check your Airtable API key and connection settings.")
+            except PPTGenerationError as e:
+                st.error(f"⚠️ PowerPoint Generation Error: {str(e)}")
+                st.info("There was a problem creating the PowerPoint file. Please check your template.")
+            except ValueError as e:
+                st.warning(f"⚠️ {str(e)}")
+            except Exception as e:
+                st.error(f"⚠️ Unexpected Error: {str(e)}")
+                st.info("Please contact support with the error details and time of occurrence.")
+                with st.expander("Technical Error Details (for debugging)"):
+                    st.code(traceback.format_exc())
+
     # dish_sticker_generator (Airtable)
     st.header(':orange[Dish Sticker] - Airtable 🍱')
     with st.expander('Expand to see more details'):
@@ -512,7 +568,7 @@ def main():
                 else:
                     st.info(f"Generating Barcode dish stickers… 🕐 {elapsed_str} | {detail}")
 
-            time.sleep(1)
+            time.sleep(2)
             st.rerun()
         else:
             if barcode_task is not None and barcode_task.is_done():
@@ -586,7 +642,7 @@ def main():
             status = progress.get("status", "Starting…")
             detail = f"{done}/{total} pages — {status}" if total else status
             st.info(f"Generating One-Sheeter… 🕐 {elapsed_str} | {detail}")
-            time.sleep(1)
+            time.sleep(2)
             st.rerun()
         else:
             if one_sheeter_task is not None and one_sheeter_task.is_done():
@@ -638,7 +694,7 @@ def main():
         if to_make_sheet_task is not None and not to_make_sheet_task.is_done():
             elapsed_str = str(timedelta(seconds=int(to_make_sheet_task.elapsed())))
             st.info(f"Generating To-Make Sheet… 🕐 {elapsed_str}")
-            time.sleep(1)
+            time.sleep(2)
             st.rerun()
         else:
             if to_make_sheet_task is not None and to_make_sheet_task.is_done():

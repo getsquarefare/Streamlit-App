@@ -167,3 +167,4 @@ cython_debug/
 # Generated output artifacts at repo root (templates in template/ stay tracked)
 /*.pptx
 /*.xlsx
+.streamlit/secrets.toml

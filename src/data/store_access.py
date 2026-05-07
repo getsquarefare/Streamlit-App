@@ -38,6 +38,7 @@ class AirTable():
         self.portion_algo_constraints_table = Table(self.api_key, self.base_id, 'tbl3jZNKowrO1IPAm')
         self.shopify_product_table = Table(self.api_key, self.base_id, 'tblZqBM26nx9QW1mN')
         self.shopify_variants_table = Table(self.api_key, self.base_id, 'tblonWG8wVPVA9w82')
+        self.bag_tracking_table = Table(self.api_key, self.base_id, 'tblI7GQIwoGRrPQwz')
 
     def get_ingredient_details_by_rcd_id(self, id):
         ingredient = self.ingredients_table.get(id)['fields']
@@ -538,11 +539,48 @@ class AirTable():
             return None
 
     def get_all_open_orders(self,view=None):
-        # Initialize tables
         if view:
             return self.open_orders_table.all(view=view)
         else:
             return self.open_orders_table.all()
+
+    def upsert_bag_record(self, bag_barcode, dish_ids, ice_pack_required):
+        """
+        Create or update a row in the Bag Tracking table.
+        dish_ids: list of Client Servings # values (strings/ints).
+        """
+        from pyairtable.formulas import match as at_match
+        formula = at_match({"#": bag_barcode})
+        existing = self.bag_tracking_table.all(formula=formula)
+        fields = {
+            "#": bag_barcode,
+            "Included Dish": dish_ids if isinstance(dish_ids, list) else [dish_ids],
+            "Ice Pack Required": bool(ice_pack_required),
+            "Status": "Pending",
+        }
+        if existing:
+            self.bag_tracking_table.update(existing[0]["id"], fields)
+        else:
+            self.bag_tracking_table.create(fields)
+
+    def update_bag_status(self, bag_barcode, status):
+        """Update Status on a bag tracking record."""
+        from pyairtable.formulas import match as at_match
+        formula = at_match({"#": bag_barcode})
+        existing = self.bag_tracking_table.all(formula=formula)
+        if existing:
+            self.bag_tracking_table.update(existing[0]["id"], {"Status": status})
+
+    def get_bag_record(self, bag_barcode):
+        """Fetch a bag tracking record by bag barcode (#)."""
+        from pyairtable.formulas import match as at_match
+        formula = at_match({"#": bag_barcode})
+        records = self.bag_tracking_table.all(formula=formula)
+        if not records:
+            return None
+        fields = records[0].get("fields", {})
+        fields["record_id"] = records[0].get("id")
+        return fields
 
 
 def new_database_access():
