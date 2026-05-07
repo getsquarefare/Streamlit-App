@@ -1,5 +1,6 @@
 import sys
 import copy
+import hashlib
 import logging
 from io import BytesIO
 from pathlib import Path
@@ -75,14 +76,22 @@ def customization_tags_from_fields(fields):
     return " ".join(parts)
 
 
-def make_bag_barcode(shipping_info, index):
+def make_bag_barcode(shipping_info):
     delivery_date = str(shipping_info.get("Delivery Date", "")).replace("-", "")
     if not delivery_date:
         delivery_date = datetime.now().strftime("%Y%m%d")
 
     zone = str(shipping_info.get("Zone Number", "X")).replace("ZONE", "").replace("Zone", "").strip()
 
-    return f"BAG-{delivery_date}-Z{zone}-{index + 1:04d}"
+    name_addr = "|".join([
+        str(shipping_info.get("Shipping Name", "")).strip().lower(),
+        str(shipping_info.get("Shipping Address 1", "")).strip().lower(),
+        str(shipping_info.get("Shipping Address 2", "")).strip().lower(),
+        str(shipping_info.get("Shipping Postal Code", "")).strip(),
+    ])
+    short_hash = hashlib.sha1(name_addr.encode("utf-8")).hexdigest()[:6].upper()
+
+    return f"BAG-{delivery_date}-Z{zone}-{short_hash}"
 
 
 def process_order_data(db):
@@ -204,10 +213,10 @@ def process_order_data(db):
 
     shipping_list = []
 
-    for idx, shipping_info in enumerate(grouped_shipping.values()):
+    for shipping_info in grouped_shipping.values():
         stickers_needed = ceil(shipping_info["Total Quantity"] / portion_per_sticker) * 2
         shipping_info["Stickers Needed"] = stickers_needed
-        shipping_info["Bag Barcode"] = make_bag_barcode(shipping_info, idx)
+        shipping_info["Bag Barcode"] = make_bag_barcode(shipping_info)
         shipping_info["Household Members"] = sorted(list(shipping_info["Household Members"]))
         shipping_list.append(shipping_info)
 
