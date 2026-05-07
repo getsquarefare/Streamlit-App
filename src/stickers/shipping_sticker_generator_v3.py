@@ -1,5 +1,4 @@
 import sys
-import json
 import copy
 import logging
 from io import BytesIO
@@ -305,38 +304,23 @@ def add_code128_barcode(slide, prs, barcode_value):
     )
 
 
-def export_mapping(shipping_list, export_path):
-    mapping = []
-
-    for item in shipping_list:
-        mapping.append(
-            {
-                "bagBarcode": item["Bag Barcode"],
-                "deliveryDate": item["Delivery Date"],
-                "shippingName": item["Shipping Name"],
-                "address1": item["Shipping Address 1"],
-                "address2": item["Shipping Address 2"],
-                "city": item["Shipping City"],
-                "province": item["Shipping Province"],
-                "postalCode": item["Shipping Postal Code"],
-                "phone": item["Shipping Phone"],
-                "zone": item["Zone Number"],
-                "householdMembers": item["Household Members"],
-                "icePackRequired": item["Ice Pack Required"],
-                "totalDishes": len(item["Dishes"]),
-                "dishes": item["Dishes"],
-            }
+def upsert_bag_to_airtable(db, shipping_info):
+    dish_ids = [
+        str(d["dishBarcode"])
+        for d in shipping_info["Dishes"]
+        if isinstance(d, dict) and d.get("dishBarcode")
+    ]
+    try:
+        db.upsert_bag_record(
+            bag_barcode=shipping_info["Bag Barcode"],
+            dish_ids=dish_ids,
+            ice_pack_required=shipping_info["Ice Pack Required"],
         )
+    except Exception as e:
+        logger.warning(f"Could not write bag {shipping_info['Bag Barcode']} to Airtable: {e}")
 
-    with open(export_path, "w") as f:
-        json.dump(mapping, f, indent=2)
 
-
-def create_shipping_stickers_barcode_ppt(
-    shipping_list,
-    template_path=None,
-    export_mapping_path=None,
-):
+def create_shipping_stickers_barcode_ppt(db, shipping_list, template_path=None):
     if template_path is None:
         template_path = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
 
@@ -357,13 +341,12 @@ def create_shipping_stickers_barcode_ppt(
             add_code128_barcode(slide, prs, shipping_info["Bag Barcode"])
             total_stickers += 1
 
+        upsert_bag_to_airtable(db, shipping_info)
+
     # Remove original template slide.
     r_id = prs.slides._sldIdLst[0].rId
     prs.part.drop_rel(r_id)
     del prs.slides._sldIdLst[0]
-
-    if export_mapping_path:
-        export_mapping(shipping_list, export_mapping_path)
 
     logger.info(f"Generated {total_stickers} shipping stickers with barcode")
 
@@ -376,7 +359,6 @@ def create_shipping_stickers_barcode_ppt(
 
 def generate_shipping_stickers_barcode(db):
     template_path = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
-    mapping_path = BASE_DIR / "bag_barcode_mapping.json"
 
     shipping_list = process_order_data(db)
 
@@ -384,9 +366,9 @@ def generate_shipping_stickers_barcode(db):
         raise AirTableError("No shipping records to process")
 
     ppt_file = create_shipping_stickers_barcode_ppt(
+        db,
         shipping_list,
         template_path=template_path,
-        export_mapping_path=mapping_path,
     )
 
     return ppt_file, shipping_list
@@ -405,7 +387,6 @@ if __name__ == "__main__":
 
         logger.info(f"Generated {len(shipping_list)} unique bag records")
         logger.info(f"Saved PPT: {output_path}")
-        logger.info(f"Saved mapping: {BASE_DIR / 'bag_barcode_mapping.json'}")
 
     except AirTableError as e:
         logger.critical(f"Airtable error: {str(e)}")
