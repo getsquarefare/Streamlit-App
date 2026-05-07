@@ -5,7 +5,6 @@ import logging
 from io import BytesIO
 from pathlib import Path
 from datetime import datetime
-from math import ceil
 
 import barcode
 from barcode.writer import ImageWriter
@@ -76,7 +75,7 @@ def customization_tags_from_fields(fields):
     return " ".join(parts)
 
 
-def make_bag_barcode(shipping_info):
+def make_bag_barcode(shipping_info, chunk_index=0):
     delivery_date = str(shipping_info.get("Delivery Date", "")).replace("-", "")
     if not delivery_date:
         delivery_date = datetime.now().strftime("%Y%m%d")
@@ -88,6 +87,7 @@ def make_bag_barcode(shipping_info):
         str(shipping_info.get("Shipping Address 1", "")).strip().lower(),
         str(shipping_info.get("Shipping Address 2", "")).strip().lower(),
         str(shipping_info.get("Shipping Postal Code", "")).strip(),
+        str(chunk_index),
     ])
     short_hash = hashlib.sha1(name_addr.encode("utf-8")).hexdigest()[:6].upper()
 
@@ -108,7 +108,6 @@ def process_order_data(db):
     logger.info(f"Found {len(orders)} open orders")
 
     shipping_data = []
-    portion_per_sticker = 6.8
 
     for order in orders:
         fields = order.get("fields", {})
@@ -205,6 +204,7 @@ def process_order_data(db):
                     "mealSticker": record.get("Meal Sticker", ""),
                     "displayText": dish_line,
                     "status": "unscanned",
+                    "adjustedQuantity": record["Quantity"],
                 }
             )
 
@@ -212,15 +212,39 @@ def process_order_data(db):
             grouped_shipping[key]["Ice Pack Required"] = True
 
     shipping_list = []
+    portion_per_bag = 6.8
 
     for shipping_info in grouped_shipping.values():
-        stickers_needed = ceil(shipping_info["Total Quantity"] / portion_per_sticker) * 2
-        shipping_info["Stickers Needed"] = stickers_needed
-        shipping_info["Bag Barcode"] = make_bag_barcode(shipping_info)
-        shipping_info["Household Members"] = sorted(list(shipping_info["Household Members"]))
-        shipping_list.append(shipping_info)
+        dishes = shipping_info["Dishes"]
+        household_members = sorted(list(shipping_info["Household Members"]))
 
-    logger.info(f"Processed {len(shipping_list)} unique shipping/bag records")
+        chunks = []
+        current_chunk = []
+        current_qty = 0.0
+        for dish in dishes:
+            dish_qty = float(dish.get("adjustedQuantity", 0) or 0)
+            if current_chunk and current_qty + dish_qty > portion_per_bag:
+                chunks.append(current_chunk)
+                current_chunk = []
+                current_qty = 0.0
+            current_chunk.append(dish)
+            current_qty += dish_qty
+        if current_chunk:
+            chunks.append(current_chunk)
+        if not chunks:
+            chunks = [[]]
+
+        for chunk_index, chunk_dishes in enumerate(chunks):
+            bag = {
+                **shipping_info,
+                "Dishes": chunk_dishes,
+                "Household Members": household_members,
+                "Stickers Needed": 1,
+                "Bag Barcode": make_bag_barcode(shipping_info, chunk_index),
+            }
+            shipping_list.append(bag)
+
+    logger.info(f"Processed {len(shipping_list)} bag records")
 
     return shipping_list
 
