@@ -317,7 +317,7 @@ def add_code128_barcode(slide, prs, barcode_value):
         {
             "quiet_zone": 2,
             "font_size": 9,
-            "text_distance": 2,
+            "text_distance": 6,
             "module_height": 11,
             "module_width": 0.3,
             "background": "white",
