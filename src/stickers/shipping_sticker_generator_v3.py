@@ -244,6 +244,21 @@ def process_order_data(db):
             }
             shipping_list.append(bag)
 
+    # Sort by zone (numeric when possible), then delivery date, then name (A-Z)
+    def sort_key(info):
+        zone_raw = str(info.get("Zone Number", ""))
+        try:
+            zone_sort = (0, int(float(zone_raw)))
+        except (ValueError, TypeError):
+            zone_sort = (1, zone_raw)
+        return (
+            zone_sort,
+            str(info.get("Delivery Date", "")),
+            str(info.get("Shipping Name", "")).strip().lower(),
+        )
+
+    shipping_list.sort(key=sort_key)
+
     logger.info(f"Processed {len(shipping_list)} bag records")
 
     return shipping_list
