@@ -36,7 +36,7 @@ class AirTable():
         self.clientserving_table = Table(self.api_key, self.base_id, 'tblVwpvUmsTS2Se51')
         self.grocery_table = Table(self.api_key, self.base_id, 'tblVndbQyR3yHwoL5')
         self.portion_algo_constraints_table = Table(self.api_key, self.base_id, 'tbl3jZNKowrO1IPAm')
-        self.shopify_product_table = Table(self.api_key, self.base_id, 'tblZqBM26nx9QW1mN')
+        self.weekly_menu_table = Table(self.api_key, self.base_id, 'tblZqBM26nx9QW1mN')
         self.shopify_variants_table = Table(self.api_key, self.base_id, 'tblonWG8wVPVA9w82')
         self.bag_tracking_table = Table(self.api_key, self.base_id, 'tblI7GQIwoGRrPQwz')
 
@@ -127,6 +127,14 @@ class AirTable():
                     )
         
         return open_orders
+    
+    def get_all_add_ons(self):
+        """Get all add-ons from the weekly menu table."""
+        DISH_ID_FIELD = 'fldO0T88j6imiXTQ0'
+        MEALS_FIELD = 'fldNqDsV9hzk1d65H'
+        formula = match({"Meals": "Add On"})
+        records = self.weekly_menu_table.all(fields=[DISH_ID_FIELD, MEALS_FIELD], formula=formula)
+        return [record['fields']['Internal Dish ID'] for record in records]
 
     # Subscription Orders (Intermediary Table)
     # @cache
@@ -288,7 +296,7 @@ class AirTable():
     def get_shopify_id(self, id):
         try:
             # Direct access assuming 'Email' is the key
-            shopify_id = self.shopify_product_table.get(
+            shopify_id = self.weekly_menu_table.get(
                 id)['fields']['∞ Shopify Id']
             return shopify_id
         except KeyError:
@@ -296,9 +304,9 @@ class AirTable():
     def get_weekly_products(self,view = None):
         try:
             if view:
-                records = self.shopify_product_table.all(view=view)
+                records = self.weekly_menu_table.all(view=view)
             else:
-                records = self.shopify_product_table.all()
+                records = self.weekly_menu_table.all()
             return records
         except Exception as e:
             raise AirTableError(f"Failed to get weekly products data: {str(e)}")
@@ -549,8 +557,8 @@ class AirTable():
         Create or update a row in the Bag Tracking table.
         dish_ids: list of Client Servings # values (strings/ints).
         """
-        from pyairtable.formulas import match as at_match
-        formula = at_match({"#": bag_barcode})
+        
+        formula = match({"#": bag_barcode})
         existing = self.bag_tracking_table.all(formula=formula)
         fields = {
             "#": bag_barcode,
@@ -565,22 +573,21 @@ class AirTable():
 
     def update_bag_status(self, bag_barcode, status):
         """Update Status on a bag tracking record."""
-        from pyairtable.formulas import match as at_match
-        formula = at_match({"#": bag_barcode})
+        formula = match({"#": bag_barcode})
         existing = self.bag_tracking_table.all(formula=formula)
         if existing:
             self.bag_tracking_table.update(existing[0]["id"], {"Status": status})
 
     def get_bag_record(self, bag_barcode):
         """Fetch a bag tracking record by bag barcode (#)."""
-        from pyairtable.formulas import match as at_match
-        formula = at_match({"#": bag_barcode})
+        formula = match({"#": bag_barcode})
         records = self.bag_tracking_table.all(formula=formula)
         if not records:
             return None
         fields = records[0].get("fields", {})
         fields["record_id"] = records[0].get("id")
         return fields
+
 
 
 def new_database_access():
