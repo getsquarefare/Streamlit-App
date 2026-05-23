@@ -96,20 +96,16 @@ class NewDishOptimizer:
             lower_bound *= target
 
 
-        """ # Ratio calculation logic:
-            # - If the current value exceeds the upper bound, ratio > 1.0 (proportional to excess)
-            # - If the current value is below the target (or lower bound for non-protein nutrients), ratio < 1.0 (inversely proportional to deficit)
-            # - If within target range, return 1.0 (no adjustment needed)
+        # Ratio calculation logic:
+        # - If the current value exceeds the upper bound, ratio > 1.0 (proportional to excess)
+        # - If the current value is below the target (or lower bound for non-protein nutrients), ratio < 1.0 (inversely proportional to deficit)
+        # - If within bounds, return 1.0 (no adjustment needed)
         if current_value > upper_bound:
-            # Over target: ratio > 1.0, proportional to exceedance
             return current_value / upper_bound
-        elif current_value < (target if normalized_nutrient == 'protein' else lower_bound):
-            # Under target: ratio < 1.0, inversely proportional to deficit
-            return current_value / (target if normalized_nutrient == 'protein' else lower_bound)
+        elif current_value < lower_bound:
+            return current_value / lower_bound
         else:
-            # Within bounds: return default ratio
-            return 1.0 """
-        return current_value / target    
+            return 1.0
 
     def _get_diff_ratios(self, current_nutrition):
         """Calculate basic ratios based on bounds"""
