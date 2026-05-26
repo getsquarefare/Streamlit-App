@@ -544,24 +544,65 @@ class AirTable():
         else:
             return self.open_orders_table.all()
 
-    def upsert_bag_record(self, bag_barcode, dish_ids, ice_pack_required):
+    def upsert_bag_record(
+        self,
+        bag_barcode,
+        dish_record_ids,
+        ice_pack_required,
+        shipping_name=None,
+        zone=None,
+        household_members=None,
+    ):
         """
-        Create or update a row in the Bag Tracking table.
-        dish_ids: list of Client Servings # values (strings/ints).
+        Create or update a row in the Bag Tracking table (tblI7GQIwoGRrPQwz).
+        dish_record_ids: Client Servings Airtable record ids (rec…) for linked field Included Dish.
+        Optional text fields Shipping Name / Zone / Household Members if those columns exist in the base.
         """
         from pyairtable.formulas import match as at_match
+
+        linked = [
+            str(rid).strip()
+            for rid in (dish_record_ids if isinstance(dish_record_ids, list) else [dish_record_ids])
+            if str(rid).strip().startswith("rec")
+        ]
+
         formula = at_match({"#": bag_barcode})
         existing = self.bag_tracking_table.all(formula=formula)
         fields = {
             "#": bag_barcode,
-            "Included Dish": dish_ids if isinstance(dish_ids, list) else [dish_ids],
+            "Included Dish": linked,
             "Ice Pack Required": bool(ice_pack_required),
             "Status": "Pending",
         }
-        if existing:
-            self.bag_tracking_table.update(existing[0]["id"], fields)
-        else:
-            self.bag_tracking_table.create(fields)
+        if shipping_name is not None and str(shipping_name).strip():
+            fields["Shipping Name"] = str(shipping_name).strip()
+        if zone is not None and str(zone).strip():
+            fields["Zone"] = str(zone).strip()
+        if household_members is not None:
+            if isinstance(household_members, list):
+                fields["Household Members"] = "\n".join(str(x) for x in household_members if str(x).strip())
+            else:
+                fields["Household Members"] = str(household_members)
+
+        try:
+            if existing:
+                self.bag_tracking_table.update(existing[0]["id"], fields)
+            else:
+                self.bag_tracking_table.create(fields)
+        except Exception as e:
+            # If optional columns are missing in Airtable, retry with core fields only.
+            core = {
+                "#": bag_barcode,
+                "Included Dish": linked,
+                "Ice Pack Required": bool(ice_pack_required),
+                "Status": "Pending",
+            }
+            if existing:
+                self.bag_tracking_table.update(existing[0]["id"], core)
+            else:
+                self.bag_tracking_table.create(core)
+            if "UNKNOWN_FIELD_NAME" not in str(e) and "Unknown field" not in str(e):
+                raise
 
     def update_bag_status(self, bag_barcode, status):
         """Update Status on a bag tracking record."""

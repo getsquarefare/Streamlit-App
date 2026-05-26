@@ -4,12 +4,9 @@ import os
 import json
 import copy
 import re
-from io import BytesIO
 from datetime import datetime
 
 import pandas as pd
-import barcode
-from barcode.writer import ImageWriter
 from pptx import Presentation
 from pptx.util import Inches
 
@@ -22,6 +19,14 @@ sys.path.append(str(BASE_DIR))
 
 from src.data.store_access import new_database_access
 from src.stickers.dish_barcode_ids import dish_barcode_from_open_order_fields
+from src.stickers.shipping_sticker_generator_v3 import (
+    populate_sticker,
+    copy_slide,
+    add_code128_barcode,
+    format_phone,
+)
+
+DEFAULT_BAG_TEMPLATE = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
 
 ICE_PACK_TAG = "Ice Pack"
 
@@ -125,6 +130,7 @@ def prepare_bag_dataframe(db):
         "Shipping City",
         "Shipping Province",
         "Shipping Postal Code",
+        "Shipping Phone",
         "Zone Number (from Delivery Zone)",
         "# of Parts",
         "#",
@@ -146,6 +152,7 @@ def prepare_bag_dataframe(db):
     df["Shipping City"] = df["Shipping City"].apply(unwrap)
     df["Shipping Province"] = df["Shipping Province"].apply(unwrap)
     df["Shipping Postal Code"] = df["Shipping Postal Code"].apply(unwrap)
+    df["Shipping Phone"] = df["Shipping Phone"].apply(unwrap) if "Shipping Phone" in df.columns else ""
     df["ZONE_NUMBER"] = df["Zone Number (from Delivery Zone)"].apply(unwrap)
     df["#"] = df["#"].apply(lambda x: unwrap(x, ""))
 
@@ -155,7 +162,7 @@ def prepare_bag_dataframe(db):
         axis=1,
     )
 
-    # Expand multi-part dishes.
+    # Multi-part: one Client Serving row, but N physical stickers → N checklist lines (same dish #).
     expanded_rows = []
 
     for _, row in df.iterrows():
@@ -217,6 +224,7 @@ def prepare_bag_dataframe(db):
             "Shipping City": unwrap(r0["Shipping City"]),
             "Shipping Province": unwrap(r0["Shipping Province"]),
             "Shipping Postal Code": unwrap(r0["Shipping Postal Code"]),
+            "Shipping Phone": format_phone(unwrap(r0.get("Shipping Phone", ""))),
             "ZONE_NUMBER": unwrap(r0["ZONE_NUMBER"]),
             "HOUSEHOLD_MEMBERS": "\n".join(sorted(household)),
             "DISH_LIST": dish_list,
@@ -259,35 +267,33 @@ def copy_slide_with_images(source_slide, target_prs):
     return target_slide
 
 
-def add_code128_barcode(slide, prs, barcode_value):
-    CODE128 = barcode.get_barcode_class("code128")
+def _uses_one_pager_template(template_path):
+    return "One_Pager" in str(template_path)
 
-    barcode_obj = CODE128(barcode_value, writer=ImageWriter(mode="RGBA"))
-    barcode_buffer = BytesIO()
 
-    barcode_obj.write(
-        barcode_buffer,
-        {
-            "quiet_zone": 2,
-            "font_size": 8,
-            "text_distance": 2,
-            "module_height": 10,
-            "module_width": 0.3,
-            "background": "white",
-            "foreground": "black",
-        },
-    )
+def _row_to_shipping_info(row):
+    zone = str(row.get("ZONE_NUMBER", "")).replace("Zone", "").replace("ZONE", "").strip()
+    return {
+        "Shipping Name": row["Shipping Name"],
+        "Shipping Address 1": row["Shipping Address 1"],
+        "Shipping Address 2": row["Shipping Address 2"],
+        "Shipping City": row["Shipping City"],
+        "Shipping Province": row["Shipping Province"],
+        "Shipping Postal Code": row["Shipping Postal Code"],
+        "Shipping Phone": row.get("Shipping Phone", ""),
+        "Zone Number": zone,
+    }
 
-    barcode_buffer.seek(0)
 
-    # Adjust this position based on your template.
-    slide.shapes.add_picture(
-        barcode_buffer,
-        Inches(6.8),
-        Inches(6.7),
-        width=Inches(2.4),
-        height=Inches(0.7),
-    )
+def populate_bag_slide(slide, row, template_path):
+    if _uses_one_pager_template(template_path):
+        populate_slide(slide, row)
+    else:
+        populate_sticker(
+            slide,
+            _row_to_shipping_info(row),
+            ice_pack_required=bool(row.get("ICE_PACK_REQUIRED", False)),
+        )
 
 
 def populate_slide(slide, row):
@@ -319,28 +325,33 @@ def populate_slide(slide, row):
 
 def generate_bag_stickers_barcode(
     db,
-    template_path = BASE_DIR / "template" / "One_Pager_Template_v2.pptx",
+    template_path=None,
     export_mapping_path=None,
 ):
+    if template_path is None:
+        template_path = DEFAULT_BAG_TEMPLATE
+    template_path = Path(template_path)
+
     df = prepare_bag_dataframe(db)
 
-    prs = Presentation(template_path)
+    template_path = Path(template_path)
+    use_shipping_layout = not _uses_one_pager_template(template_path)
+
+    prs = Presentation(str(template_path))
     template_slide = prs.slides[0]
 
-    generated_slides = []
-
     for _, row in df.iterrows():
-        new_slide = copy_slide_with_images(template_slide, prs)
-        populate_slide(new_slide, row)
+        if use_shipping_layout:
+            new_slide = copy_slide(template_slide, prs)
+        else:
+            new_slide = copy_slide_with_images(template_slide, prs)
+        populate_bag_slide(new_slide, row, template_path)
         add_code128_barcode(new_slide, prs, row["BAG_BARCODE"])
-        generated_slides.append(new_slide)
 
-    # Remove original template slides.
-    original_slide_count = 1
-    for _ in range(original_slide_count):
-        r_id = prs.slides._sldIdLst[0].rId
-        prs.part.drop_rel(r_id)
-        del prs.slides._sldIdLst[0]
+    # Remove template slide.
+    r_id = prs.slides._sldIdLst[0].rId
+    prs.part.drop_rel(r_id)
+    del prs.slides._sldIdLst[0]
 
     mapping = []
     for _, row in df.iterrows():
@@ -371,18 +382,23 @@ def generate_bag_stickers_barcode(
         with open(export_mapping_path, "w") as f:
             json.dump(mapping, f, indent=2)
 
-    # Write each bag to the Airtable Bag Tracking table.
+    # Write each bag to Airtable Bag Tracking (source of truth for plating website).
     for entry in mapping:
-        dish_ids = [
-            str(d["dishBarcode"])
-            for d in entry["dishes"]
-            if isinstance(d, dict) and d.get("dishBarcode")
-        ]
+        dish_record_ids = list(
+            dict.fromkeys(
+                str(d["dishBarcode"])
+                for d in entry["dishes"]
+                if isinstance(d, dict) and str(d.get("dishBarcode", "")).startswith("rec")
+            )
+        )
         try:
             db.upsert_bag_record(
                 bag_barcode=entry["bagBarcode"],
-                dish_ids=dish_ids,
+                dish_record_ids=dish_record_ids,
                 ice_pack_required=entry["icePackRequired"],
+                shipping_name=entry.get("shippingName"),
+                zone=entry.get("zone"),
+                household_members=entry.get("householdMembers"),
             )
         except Exception as e:
             print(f"⚠️ Could not write bag {entry['bagBarcode']} to Airtable: {e}")
@@ -395,8 +411,8 @@ if __name__ == "__main__":
 
     prs, df = generate_bag_stickers_barcode(
         db,
-        template_path=str(BASE_DIR / "template" / "One_Pager_Template_v2.pptx"),
-        export_mapping_path=str(BASE_DIR / "bag_barcode_mapping.json"),
+        template_path=str(DEFAULT_BAG_TEMPLATE),
+        export_mapping_path=None,
     )
 
     output_path = BASE_DIR / f"bag_stickers_barcode_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pptx"
@@ -404,4 +420,7 @@ if __name__ == "__main__":
 
     print(f"Generated {len(df)} bag barcode stickers")
     print(f"Saved PPT: {output_path}")
+    ice_count = int(df["ICE_PACK_REQUIRED"].sum()) if "ICE_PACK_REQUIRED" in df.columns else 0
+    if ice_count:
+        print(f"Ice-pack bags ({ice_count}): snowflake on name line (B&W friendly)")
     print(f"Saved mapping: {BASE_DIR / 'bag_barcode_mapping.json'}")
