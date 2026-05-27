@@ -188,38 +188,23 @@ def print_stickers():
 
 # Process Data 
 def generate_sticker_df(df):
-    df_dish = df.fillna('N/A')
-    
-    # Generate Requested Columns
-    # barcode ID: got a float - change to string
-    df_dish["#"] = df_dish["#"].apply(lambda x: str(int(x)))
-
-    # all linked item needs to be extracted from a list
-    df_dish['client_name'] = df_dish['Customer Name'].apply(lambda x: x[0] if isinstance(x, list) else x)
-
-    # breakfast, lunch, etc.
-    df_dish['meal'] = df_dish['Meal Portion (from Linked OrderItem)'].apply(lambda x: x[0] if isinstance(x, list) else x)
-
-    # zone
-    df_dish['zone'] = df_dish['Delivery Zone (from Linked OrderItem)'].apply(lambda x: 'Zone ' + str(x[0]) if isinstance(x, list) else 'Zone ' + str(x))
-
     def add_days(date_str, days = 3):  # by default: add 3 days based on EST
         date = datetime.now(est).strptime(date_str, "%Y-%m-%d")
         end_date = date + timedelta(days)
         return end_date.strftime('%m/%d/%Y')
     
-    df_dish['Best Before'] = df_dish['Delivery Date'].apply(lambda x: add_days(x[0] if isinstance(x, list) else x, 3))
-    df_dish['best_before'] = "Best before: " + df_dish['Best Before']
+    df['Best Before'] = df['Delivery Date'].apply(lambda x: add_days(x[0] if isinstance(x, list) else x, 3))
+    df['best_before'] = "Best before: " + df['Best Before']
 
-    meal_info = df_dish['Meal Sticker (from Linked OrderItem)'].apply(lambda x: x[0] if isinstance(x, list) else x)
-    df_dish[['bowl_name', 'ingredients']] = meal_info.str.split(': ', n=1, expand=True)
-    df_dish['parts'] = df_dish['# of Parts'].apply(lambda x: x[0] if isinstance(x, list) else x)
+    meal_info = df['Meal Sticker (from Linked OrderItem)'].apply(lambda x: x[0] if isinstance(x, list) else x)
+    df[['bowl_name', 'ingredients']] = meal_info.str.split(': ', n=1, expand=True)
+    df['parts'] = df['# of Parts'].apply(lambda x: x[0] if isinstance(x, list) else x)
 
     # duplicate according to '# portions'
     # df_dish = df_dish.loc[df_dish.index.repeat(df_dish['# portions'])]
     # df_dish = df_dish.reset_index(drop=True)
     
-    return df_dish
+    return df
 
 """### Draw Slides"""
 
@@ -268,9 +253,6 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None, cancel_event=N
     BARCODE_HEIGHT = 0.75
     margin = Inches(0.05)
 
-
-    if 'Dish ID (from Linked OrderItem)' in df.columns and 'Position Id' in df.columns:
-        df.sort_values(by=['Dish ID (from Linked OrderItem)', 'Position Id'], ascending=[True, True], inplace=True)
 
     # Find the maximum number of parts across all rows
     max_parts = df['parts'].max()
@@ -342,30 +324,6 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None, cancel_event=N
             id_barcode.close()
     return prs
 
-def read_weekly_products(db):
-    fields_to_return = ['Internal Dish ID', '# of Parts']
-    try:
-        records = db.get_weekly_products()
-        if not records:
-            raise AirTableError("No records found in the specified view.")
-        
-        # Convert records to DataFrame
-        df = pd.DataFrame(records)
-        
-        # Extract fields from the records
-        if 'fields' in df.columns:
-            fields_df = pd.json_normalize(df['fields'])
-            # Combine the records with their fields
-            df_flat = pd.concat([df.drop('fields', axis=1), fields_df], axis=1)
-        else:
-            df_flat = df
-
-        df_flat = df_flat[fields_to_return]
-
-        return df_flat
-    except Exception as e:
-        raise AirTableError(f"Error fetching data from Airtable: {str(e)}")
-
 def read_client_serving(db):
     fields_to_return = ['#', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts']
     try:
@@ -392,7 +350,52 @@ def read_client_serving(db):
                 else (int(x) if isinstance(x, (int, float)) else x)
             )
         df_flat = df_flat[fields_to_return]
-            
+
+        add_ons = db.get_all_add_ons()
+        print(f"Add-ons: {add_ons}")
+
+        df_flat = df_flat.fillna('N/A')
+    
+        # Generate Requested Columns
+        # barcode ID: got a float - change to string
+        df_flat["#"] = df_flat["#"].apply(lambda x: str(int(x)))
+
+        # all linked item needs to be extracted from a list
+        df_flat['client_name'] = df_flat['Customer Name'].apply(lambda x: x[0] if isinstance(x, list) else x)
+
+        # zone
+        df_flat['zone'] = df_flat['Delivery Zone (from Linked OrderItem)'].apply(lambda x: 'Zone ' + str(x[0]) if isinstance(x, list) else 'Zone ' + str(x))
+
+        #mark record yes in "add-on" if dish id is in add-ons
+        df_flat['add-on'] = df_flat['Dish ID (from Linked OrderItem)'].apply(lambda x: 'yes' if x in add_ons else 'no')
+        
+        # Derive meal from 'Meal Portion (from Linked OrderItem)' (linked field arrives as a list)
+        df_flat['meal'] = df_flat['Meal Portion (from Linked OrderItem)'].apply(
+            lambda x: (x[0] if isinstance(x, list) and x else x) or ''
+        )
+
+        # Sort order: lunch/dinner → breakfast → lunch&dinner add-ons → snacks → snacks add-ons
+        def _sort_rank(row):
+            meal = str(row['meal']).strip().lower()
+            is_addon = row['add-on'] == 'yes'
+            is_snack = 'snack' in meal
+            is_breakfast = 'breakfast' in meal
+            if is_snack:
+                return 4 if is_addon else 3
+            if is_addon:
+                return 2  # lunch/dinner add-ons
+            if is_breakfast:
+                return 1
+            return 0  # lunch/dinner non-add-on
+
+        # Sort: tier first (dish-level), then group by Dish ID, then Position Id within dish
+        df_flat['_sort_rank'] = df_flat.apply(_sort_rank, axis=1)
+        df_flat = df_flat.sort_values(
+            by=['_sort_rank', 'Dish ID (from Linked OrderItem)', 'Position Id'],
+            ascending=[True, True, True]
+        ).drop(columns=['_sort_rank'])
+        #save to csv
+        # df_flat.to_csv(f'{current_date_time}_dish_sticker_barcode.csv', index=False)
         return df_flat
         
     except Exception as e:

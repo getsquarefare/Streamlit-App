@@ -69,6 +69,10 @@ def process_order_data(db):
             if isinstance(zone, list) and len(zone) > 0:
                 zone = str(zone[0])
 
+            delivery_date = fields.get('Delivery Date', '')
+            if isinstance(delivery_date, list):
+                delivery_date = delivery_date[0] if delivery_date else ''
+
             # Create shipping record
             shipping_record = {
                 'Shipping Name': fields.get('Shipping Name', ''),
@@ -79,6 +83,7 @@ def process_order_data(db):
                 'Shipping Postal Code': fields.get('Shipping Postal Code', ''),
                 'Shipping Phone': phone,
                 'Zone Number': zone,
+                'Delivery Date': delivery_date,
                 'Quantity': adjusted_quantity
             }
 
@@ -96,7 +101,8 @@ def process_order_data(db):
                 record['Shipping Province'],
                 record['Shipping Postal Code'],
                 record['Shipping Phone'],
-                record['Zone Number']
+                record['Zone Number'],
+                record['Delivery Date']
             )
 
             if key not in grouped_shipping:
@@ -109,6 +115,7 @@ def process_order_data(db):
                     'Shipping Postal Code': record['Shipping Postal Code'],
                     'Shipping Phone': record['Shipping Phone'],
                     'Zone Number': record['Zone Number'],
+                    'Delivery Date': record['Delivery Date'],
                     'Total Quantity': 0
                 }
 
@@ -120,6 +127,21 @@ def process_order_data(db):
             stickers_needed = ceil(shipping_info['Total Quantity'] / portion_per_sticker) * 2
             shipping_info['Stickers Needed'] = stickers_needed
             shipping_list.append(shipping_info)
+
+        # Sort by zone (numeric when possible), then delivery date, then name (A-Z)
+        def sort_key(info):
+            zone_raw = str(info.get('Zone Number', ''))
+            try:
+                zone_sort = (0, int(float(zone_raw)))
+            except (ValueError, TypeError):
+                zone_sort = (1, zone_raw)
+            return (
+                zone_sort,
+                str(info.get('Delivery Date', '')),
+                str(info.get('Shipping Name', '')).strip().lower(),
+            )
+
+        shipping_list.sort(key=sort_key)
 
         logger.info(f"Processed {len(shipping_list)} unique shipping addresses")
         return shipping_list
