@@ -10,7 +10,7 @@ import barcode
 from barcode.writer import ImageWriter
 from pptx import Presentation
 from pptx.util import Pt, Inches
-
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 BASE_DIR = Path(__file__).resolve().parents[2]  # Streamlit-App
 sys.path.append(str(BASE_DIR))
 
@@ -23,6 +23,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 VIEW = "viwDpTtU0qaT9NcvG"
+
+DEFAULT_BAG_TEMPLATE = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
+# Ice-pack bags: snowflake on the name line (B&W printer friendly).
+SNOWFLAKE_GLYPH = "❄"
+SNOWFLAKE_WIDTH = Inches(1)
 
 
 class PPTGenerationError(Exception):
@@ -244,41 +249,92 @@ def process_order_data(db):
             }
             shipping_list.append(bag)
 
-    # Sort by zone (numeric when possible), then delivery date, then name (A-Z)
-    def sort_key(info):
-        zone_raw = str(info.get("Zone Number", ""))
-        try:
-            zone_sort = (0, int(float(zone_raw)))
-        except (ValueError, TypeError):
-            zone_sort = (1, zone_raw)
-        return (
-            zone_sort,
-            str(info.get("Delivery Date", "")),
-            str(info.get("Shipping Name", "")).strip().lower(),
-        )
-
-    shipping_list.sort(key=sort_key)
-
     logger.info(f"Processed {len(shipping_list)} bag records")
 
     return shipping_list
 
 
+def _style_sticker_paragraph(paragraph, size_pt):
+    paragraph.font.size = Pt(size_pt)
+    paragraph.font.name = "Lato"
+
+
+def _sticker_content_bounds(slide):
+    """Left/right edges of the address column — matches footer box width on template."""
+    left = None
+    right = 0
+    for name in ADDRESS_STACK_ORDER:
+        for sh in slide.shapes:
+            if sh.name == name:
+                left = sh.left if left is None else min(left, sh.left)
+                right = max(right, sh.left + sh.width)
+    if left is None:
+        left = Inches(0.79)
+    if right <= left:
+        right = left + Inches(9.02)
+    return int(left), int(right)
+
+
+def _find_name_shape(slide):
+    for sh in slide.shapes:
+        if sh.name == "shippingName" and sh.has_text_frame:
+            return sh
+    for sh in slide.shapes:
+        if sh.has_text_frame and "Shipping Name" in (sh.text_frame.text or ""):
+            return sh
+    return None
+
+
+def _add_ice_snowflake(slide, name_shape, content_right):
+    """Right-aligned snowflake on the same row as the shipping name."""
+    width = int(SNOWFLAKE_WIDTH)
+    left = int(name_shape.left + name_shape.width + Inches(0.1))
+    top = int(name_shape.top)
+    height = int(name_shape.height)
+
+    box = slide.shapes.add_textbox(left, top, width, height)
+    box.name = "iceSnowflake"
+    tf = box.text_frame
+    tf.clear()
+    tf.margin_left = 0
+    tf.margin_right = 0
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    p = tf.paragraphs[0]
+    p.text = SNOWFLAKE_GLYPH
+    p.alignment = PP_ALIGN.RIGHT
+    p.font.size = Pt(80)
+    p.font.bold = True
+
+
+def _layout_for_copy(template_slide, target_prs):
+    """
+    Layout must come from target_prs. Using template_slide.slide_layout from another
+    Presentation corrupts the saved file (duplicate OPC parts / broken relationships).
+    """
+    name = template_slide.slide_layout.name
+    for layout in target_prs.slide_layouts:
+        if layout.name == name:
+            return layout
+    return target_prs.slide_layouts[0]
+
+
 def copy_slide(template_slide, target_prs):
-    new_slide = target_prs.slides.add_slide(template_slide.slide_layout)
+    new_slide = target_prs.slides.add_slide(_layout_for_copy(template_slide, target_prs))
 
     for shape in new_slide.shapes:
         sp = shape._element
         sp.getparent().remove(sp)
 
     for shape in template_slide.shapes:
-        new_shape = copy.deepcopy(shape)
-        new_slide.shapes._spTree.insert_element_before(new_shape._element, "p:extLst")
+        # Copy XML element only — deepcopy(shape) breaks on python-pptx Fill objects (3.13+).
+        new_element = copy.deepcopy(shape.element)
+        new_slide.shapes._spTree.insert_element_before(new_element, "p:extLst")
 
     return new_slide
 
 
-def populate_sticker(slide, shipping_info):
+def populate_sticker(slide, shipping_info, ice_pack_required=False):
+    name_shape = None
     for shape in slide.shapes:
         if not shape.has_text_frame:
             continue
@@ -290,16 +346,15 @@ def populate_sticker(slide, shipping_info):
 
             if "Shipping Name" in text:
                 paragraph.text = shipping_info["Shipping Name"]
-                paragraph.font.size = Pt(28)
-                paragraph.font.name = "Lato"
+                _style_sticker_paragraph(paragraph, 28)
+                name_shape = shape
 
             elif "Address" in text:
                 if shipping_info["Shipping Address 2"]:
                     paragraph.text = f"{shipping_info['Shipping Address 1']}, {shipping_info['Shipping Address 2']}"
                 else:
                     paragraph.text = shipping_info["Shipping Address 1"]
-                paragraph.font.size = Pt(24)
-                paragraph.font.name = "Lato"
+                _style_sticker_paragraph(paragraph, 18)
 
             elif "City" in text:
                 paragraph.text = (
@@ -307,18 +362,96 @@ def populate_sticker(slide, shipping_info):
                     f"{shipping_info['Shipping Province']} "
                     f"{shipping_info['Shipping Postal Code']}"
                 )
-                paragraph.font.size = Pt(24)
-                paragraph.font.name = "Lato"
+                _style_sticker_paragraph(paragraph, 18)
 
             elif "Shipping Phone" in text:
                 paragraph.text = str(shipping_info["Shipping Phone"])
-                paragraph.font.size = Pt(24)
-                paragraph.font.name = "Lato"
+                _style_sticker_paragraph(paragraph, 18)
 
             elif "ZONE" in text:
                 paragraph.text = f"ZONE {shipping_info['Zone Number']}"
-                paragraph.font.size = Pt(28)
-                paragraph.font.name = "Lato"
+                _style_sticker_paragraph(paragraph, 28)
+
+    if ice_pack_required:
+        name_shape = name_shape or _find_name_shape(slide)
+        if name_shape:
+            _, content_right = _sticker_content_bounds(slide)
+            _add_ice_snowflake(slide, name_shape, content_right)
+
+
+ADDRESS_STACK_ORDER = ("shippingName", "shippingAddress", "shippingZip", "shippingPhone")
+ADDRESS_COLUMN_MAX_WIDTH = Inches(5.2)
+# Used by _constrain_and_reflow_address when that path is enabled.
+ADDRESS_START_TOP = Inches(1.75)
+# Lift entire address column + barcode together (template-relative layout preserved).
+ADDRESS_BLOCK_NUDGE_UP = Inches(0.28)
+# Footer ZONE text shape top (~6.06"); visible box border is higher on background art.
+FOOTER_ZONE_TOP = Inches(6.06)
+# Background: REFRIGERATE/ZONE box border sits above ZONE text shape.
+FOOTER_BOX_LINE_OFFSET_ABOVE_ZONE = Inches(0.72)
+# Target gap above box border when vertical space allows.
+BARCODE_GAP_ABOVE_FOOTER = Inches(0.18)
+
+
+def _constrain_and_reflow_address(slide):
+    """Left column only; stack lines vertically starting higher on the sticker."""
+    shapes = {sh.name: sh for sh in slide.shapes if sh.has_text_frame and sh.name in ADDRESS_STACK_ORDER}
+    for sh in shapes.values():
+        if sh.width > ADDRESS_COLUMN_MAX_WIDTH:
+            sh.width = int(ADDRESS_COLUMN_MAX_WIDTH)
+        sh.text_frame.word_wrap = True
+
+    cursor_top = ADDRESS_START_TOP
+    gap = Inches(0.04)
+    for name in ADDRESS_STACK_ORDER:
+        sh = shapes.get(name)
+        if sh is None:
+            continue
+        sh.top = int(cursor_top)
+        cursor_top = sh.top + sh.height + gap
+
+
+def _address_stack_bottom(slide) -> int:
+    """Bottom edge (EMUs) of the stacked address column, including phone."""
+    bottom = int(ADDRESS_START_TOP)
+    for name in ADDRESS_STACK_ORDER:
+        for sh in slide.shapes:
+            if sh.name == name and sh.has_text_frame:
+                bottom = max(bottom, int(sh.top + sh.height))
+    return bottom
+
+
+# Space between phone line and top of barcode image.
+BARCODE_GAP_BELOW_ADDRESS = Inches(0.05)
+# Barcode image height on slide (keep fixed when nudging vertical position).
+BARCODE_IMAGE_HEIGHT = Inches(1.38)
+
+
+def _footer_zone_top(slide):
+    for shape in slide.shapes:
+        if shape.has_text_frame and shape.name == "zone":
+            return shape.top
+    return FOOTER_ZONE_TOP
+
+
+def _footer_box_line_top(slide):
+    """Top of REFRIGERATE/ZONE bordered box (background), above ZONE text."""
+    return int(_footer_zone_top(slide) - FOOTER_BOX_LINE_OFFSET_ABOVE_ZONE)
+
+
+def _shipping_phone_bottom(slide) -> int:
+    for shape in slide.shapes:
+        if shape.name == "shippingPhone" and shape.has_text_frame:
+            return int(shape.top + shape.height)
+    return int(Inches(4.63))
+
+
+def _nudge_address_block_up(slide):
+    """Shift name/address/phone up by the same amount without re-stacking."""
+    nudge = int(ADDRESS_BLOCK_NUDGE_UP)
+    for shape in slide.shapes:
+        if shape.name in ADDRESS_STACK_ORDER:
+            shape.top = int(shape.top) - nudge
 
 
 def add_code128_barcode(slide, prs, barcode_value):
@@ -330,11 +463,11 @@ def add_code128_barcode(slide, prs, barcode_value):
     barcode_obj.write(
         barcode_buffer,
         {
-            "quiet_zone": 2,
-            "font_size": 9,
-            "text_distance": 6,
-            "module_height": 11,
-            "module_width": 0.3,
+            "quiet_zone": 4,
+            "font_size": 12,
+            "text_distance": 2.5,
+            "module_height": 24,
+            "module_width": 0.5,
             "background": "white",
             "foreground": "black",
         },
@@ -342,13 +475,27 @@ def add_code128_barcode(slide, prs, barcode_value):
 
     barcode_buffer.seek(0)
 
-    # Adjust these values after checking first PPT output.
+    _nudge_address_block_up(slide)
+    content_left, content_right = _sticker_content_bounds(slide)
+    barcode_width = content_right - content_left
+    barcode_height = int(BARCODE_IMAGE_HEIGHT)
+
+    footer_top = _footer_box_line_top(slide)
+    top = footer_top - barcode_height - int(BARCODE_GAP_ABOVE_FOOTER)
+    phone_bottom = _shipping_phone_bottom(slide) + int(BARCODE_GAP_BELOW_ADDRESS)
+    if top < phone_bottom:
+        top = phone_bottom
+    if top + barcode_height > footer_top - int(BARCODE_GAP_ABOVE_FOOTER):
+        top = max(phone_bottom, footer_top - barcode_height - int(BARCODE_GAP_ABOVE_FOOTER))
+
+    left = int((prs.slide_width - barcode_width) / 2)
+
     slide.shapes.add_picture(
         barcode_buffer,
-        Inches(5.55),
-        Inches(3.9),
-        width=Inches(3.2),
-        height=Inches(0.95),
+        left,
+        int(top),
+        width=barcode_width,
+        height=int(barcode_height),
     )
 
 
@@ -361,8 +508,11 @@ def upsert_bag_to_airtable(db, shipping_info):
     try:
         db.upsert_bag_record(
             bag_barcode=shipping_info["Bag Barcode"],
-            dish_ids=dish_ids,
+            dish_record_ids=dish_ids,
             ice_pack_required=shipping_info["Ice Pack Required"],
+            shipping_name=shipping_info.get("Shipping Name"),
+            zone=shipping_info.get("Zone Number"),
+            household_members=shipping_info.get("Household Members"),
         )
     except Exception as e:
         logger.warning(f"Could not write bag {shipping_info['Bag Barcode']} to Airtable: {e}")
@@ -385,7 +535,7 @@ def create_shipping_stickers_barcode_ppt(db, shipping_list, template_path=None):
 
         for _ in range(stickers_needed):
             slide = copy_slide(template_slide, prs)
-            populate_sticker(slide, shipping_info)
+            populate_sticker(slide, shipping_info, shipping_info.get("Ice Pack Required", False))
             add_code128_barcode(slide, prs, shipping_info["Bag Barcode"])
             total_stickers += 1
 
@@ -413,6 +563,24 @@ def generate_shipping_stickers_barcode(db):
     if not shipping_list:
         raise AirTableError("No shipping records to process")
 
+    for info in shipping_list:
+        dish_record_ids = [
+            str(d.get("dishBarcode", ""))
+            for d in info.get("Dishes", [])
+            if str(d.get("dishBarcode", "")).startswith("rec")
+        ]
+        try:
+            db.upsert_bag_record(
+                bag_barcode=info["Bag Barcode"],
+                dish_record_ids=dish_record_ids,
+                ice_pack_required=info.get("Ice Pack Required", False),
+                shipping_name=info.get("Shipping Name"),
+                zone=info.get("Zone Number"),
+                household_members=info.get("Household Members"),
+            )
+        except Exception as e:
+            logger.warning(f"Could not write bag {info['Bag Barcode']} to Airtable: {e}")
+
     ppt_file = create_shipping_stickers_barcode_ppt(
         db,
         shipping_list,
@@ -435,6 +603,7 @@ if __name__ == "__main__":
 
         logger.info(f"Generated {len(shipping_list)} unique bag records")
         logger.info(f"Saved PPT: {output_path}")
+        logger.info("Bag rows written to Airtable Bag Tracking table")
 
     except AirTableError as e:
         logger.critical(f"Airtable error: {str(e)}")

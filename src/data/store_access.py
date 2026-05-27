@@ -36,7 +36,7 @@ class AirTable():
         self.clientserving_table = Table(self.api_key, self.base_id, 'tblVwpvUmsTS2Se51')
         self.grocery_table = Table(self.api_key, self.base_id, 'tblVndbQyR3yHwoL5')
         self.portion_algo_constraints_table = Table(self.api_key, self.base_id, 'tbl3jZNKowrO1IPAm')
-        self.weekly_menu_table = Table(self.api_key, self.base_id, 'tblZqBM26nx9QW1mN')
+        self.shopify_product_table = Table(self.api_key, self.base_id, 'tblZqBM26nx9QW1mN')
         self.shopify_variants_table = Table(self.api_key, self.base_id, 'tblonWG8wVPVA9w82')
         self.bag_tracking_table = Table(self.api_key, self.base_id, 'tblI7GQIwoGRrPQwz')
 
@@ -127,14 +127,6 @@ class AirTable():
                     )
         
         return open_orders
-    
-    def get_all_add_ons(self):
-        """Get all add-ons from the weekly menu table."""
-        DISH_ID_FIELD = 'fldO0T88j6imiXTQ0'
-        MEALS_FIELD = 'fldNqDsV9hzk1d65H'
-        formula = match({"Meals": "Add On"})
-        records = self.weekly_menu_table.all(fields=[DISH_ID_FIELD, MEALS_FIELD], formula=formula)
-        return [record['fields']['Internal Dish ID'] for record in records]
 
     # Subscription Orders (Intermediary Table)
     # @cache
@@ -296,7 +288,7 @@ class AirTable():
     def get_shopify_id(self, id):
         try:
             # Direct access assuming 'Email' is the key
-            shopify_id = self.weekly_menu_table.get(
+            shopify_id = self.shopify_product_table.get(
                 id)['fields']['∞ Shopify Id']
             return shopify_id
         except KeyError:
@@ -304,9 +296,9 @@ class AirTable():
     def get_weekly_products(self,view = None):
         try:
             if view:
-                records = self.weekly_menu_table.all(view=view)
+                records = self.shopify_product_table.all(view=view)
             else:
-                records = self.weekly_menu_table.all()
+                records = self.shopify_product_table.all()
             return records
         except Exception as e:
             raise AirTableError(f"Failed to get weekly products data: {str(e)}")
@@ -552,42 +544,84 @@ class AirTable():
         else:
             return self.open_orders_table.all()
 
-    def upsert_bag_record(self, bag_barcode, dish_ids, ice_pack_required):
+    def upsert_bag_record(
+        self,
+        bag_barcode,
+        dish_record_ids,
+        ice_pack_required,
+        shipping_name=None,
+        zone=None,
+        household_members=None,
+    ):
         """
-        Create or update a row in the Bag Tracking table.
-        dish_ids: list of Client Servings # values (strings/ints).
+        Create or update a row in the Bag Tracking table (tblI7GQIwoGRrPQwz).
+        dish_record_ids: Client Servings Airtable record ids (rec…) for linked field Included Dish.
+        Optional text fields Shipping Name / Zone / Household Members if those columns exist in the base.
         """
-        
-        formula = match({"#": bag_barcode})
+        from pyairtable.formulas import match as at_match
+
+        linked = [
+            str(rid).strip()
+            for rid in (dish_record_ids if isinstance(dish_record_ids, list) else [dish_record_ids])
+            if str(rid).strip().startswith("rec")
+        ]
+
+        formula = at_match({"#": bag_barcode})
         existing = self.bag_tracking_table.all(formula=formula)
         fields = {
             "#": bag_barcode,
-            "Included Dish": dish_ids if isinstance(dish_ids, list) else [dish_ids],
+            "Included Dish": linked,
             "Ice Pack Required": bool(ice_pack_required),
             "Status": "Pending",
         }
-        if existing:
-            self.bag_tracking_table.update(existing[0]["id"], fields)
-        else:
-            self.bag_tracking_table.create(fields)
+        if shipping_name is not None and str(shipping_name).strip():
+            fields["Shipping Name"] = str(shipping_name).strip()
+        if zone is not None and str(zone).strip():
+            fields["Zone"] = str(zone).strip()
+        if household_members is not None:
+            if isinstance(household_members, list):
+                fields["Household Members"] = "\n".join(str(x) for x in household_members if str(x).strip())
+            else:
+                fields["Household Members"] = str(household_members)
+
+        try:
+            if existing:
+                self.bag_tracking_table.update(existing[0]["id"], fields)
+            else:
+                self.bag_tracking_table.create(fields)
+        except Exception as e:
+            # If optional columns are missing in Airtable, retry with core fields only.
+            core = {
+                "#": bag_barcode,
+                "Included Dish": linked,
+                "Ice Pack Required": bool(ice_pack_required),
+                "Status": "Pending",
+            }
+            if existing:
+                self.bag_tracking_table.update(existing[0]["id"], core)
+            else:
+                self.bag_tracking_table.create(core)
+            if "UNKNOWN_FIELD_NAME" not in str(e) and "Unknown field" not in str(e):
+                raise
 
     def update_bag_status(self, bag_barcode, status):
         """Update Status on a bag tracking record."""
-        formula = match({"#": bag_barcode})
+        from pyairtable.formulas import match as at_match
+        formula = at_match({"#": bag_barcode})
         existing = self.bag_tracking_table.all(formula=formula)
         if existing:
             self.bag_tracking_table.update(existing[0]["id"], {"Status": status})
 
     def get_bag_record(self, bag_barcode):
         """Fetch a bag tracking record by bag barcode (#)."""
-        formula = match({"#": bag_barcode})
+        from pyairtable.formulas import match as at_match
+        formula = at_match({"#": bag_barcode})
         records = self.bag_tracking_table.all(formula=formula)
         if not records:
             return None
         fields = records[0].get("fields", {})
         fields["record_id"] = records[0].get("id")
         return fields
-
 
 
 def new_database_access():
