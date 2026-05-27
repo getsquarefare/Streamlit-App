@@ -26,8 +26,8 @@ VIEW = "viwDpTtU0qaT9NcvG"
 
 DEFAULT_BAG_TEMPLATE = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
 # Ice-pack bags: snowflake on the name line (B&W printer friendly).
-SNOWFLAKE_GLYPH = "\u2744"
-SNOWFLAKE_WIDTH = Inches(0.85)
+SNOWFLAKE_GLYPH = "❄"
+SNOWFLAKE_WIDTH = Inches(1)
 
 
 class PPTGenerationError(Exception):
@@ -288,7 +288,7 @@ def _find_name_shape(slide):
 def _add_ice_snowflake(slide, name_shape, content_right):
     """Right-aligned snowflake on the same row as the shipping name."""
     width = int(SNOWFLAKE_WIDTH)
-    left = int(content_right - width)
+    left = int(name_shape.left + name_shape.width + Inches(0.1))
     top = int(name_shape.top)
     height = int(name_shape.height)
 
@@ -302,9 +302,8 @@ def _add_ice_snowflake(slide, name_shape, content_right):
     p = tf.paragraphs[0]
     p.text = SNOWFLAKE_GLYPH
     p.alignment = PP_ALIGN.RIGHT
-    p.font.size = Pt(40)
+    p.font.size = Pt(80)
     p.font.bold = True
-    p.font.name = "Segoe UI Symbol"
 
 
 def _layout_for_copy(template_slide, target_prs):
