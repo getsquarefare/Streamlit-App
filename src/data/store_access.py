@@ -133,6 +133,36 @@ class AirTable():
     def get_subscription_orders(self):
         return self.subscription_table.all()
 
+    def get_all_add_ons(self):
+        """
+        Internal Dish IDs for rows marked Meals = "Add On" in the weekly menu table
+        (tblZqBM26nx9QW1mN — shopify_product_table). Used for dish sticker sort order.
+        """
+        formula = match({"Meals": "Add On"})
+        try:
+            records = self.shopify_product_table.all(
+                fields=["Internal Dish ID", "Meals"],
+                formula=formula,
+            )
+        except Exception as e:
+            logger.warning("Could not fetch add-ons from weekly menu table: %s", e)
+            return set()
+
+        dish_ids = set()
+        for record in records:
+            raw = record.get("fields", {}).get("Internal Dish ID")
+            if raw is None:
+                continue
+            values = raw if isinstance(raw, list) else [raw]
+            for val in values:
+                if val is None or val == "":
+                    continue
+                try:
+                    dish_ids.add(int(float(val)))
+                except (TypeError, ValueError):
+                    dish_ids.add(str(val).strip())
+        return dish_ids
+
     # inside the dish, the ingredient is recorded as the id
     def get_dish_value(self):
         dishes = self.dishes_table.first()

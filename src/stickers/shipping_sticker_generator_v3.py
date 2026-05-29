@@ -10,7 +10,6 @@ import barcode
 from barcode.writer import ImageWriter
 from pptx import Presentation
 from pptx.util import Pt, Inches
-from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 BASE_DIR = Path(__file__).resolve().parents[2]  # Streamlit-App
 sys.path.append(str(BASE_DIR))
 
@@ -25,9 +24,9 @@ logger = logging.getLogger(__name__)
 VIEW = "viwDpTtU0qaT9NcvG"
 
 DEFAULT_BAG_TEMPLATE = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
-# Ice-pack bags: snowflake on the name line (B&W printer friendly).
-SNOWFLAKE_GLYPH = "❄"
-SNOWFLAKE_WIDTH = Inches(1)
+SNOWFLAKE_IMAGE = BASE_DIR / "template" / "snowflake.png"
+# Ice-pack bags: snowflake icon on the name line (B&W printer friendly).
+SNOWFLAKE_WIDTH = Inches(0.55)
 
 
 class PPTGenerationError(Exception):
@@ -286,24 +285,17 @@ def _find_name_shape(slide):
 
 
 def _add_ice_snowflake(slide, name_shape, content_right):
-    """Right-aligned snowflake on the same row as the shipping name."""
-    width = int(SNOWFLAKE_WIDTH)
-    left = int(name_shape.left + name_shape.width + Inches(0.1))
-    top = int(name_shape.top)
-    height = int(name_shape.height)
+    """Right-aligned snowflake image on the same row as the shipping name."""
+    if not SNOWFLAKE_IMAGE.is_file():
+        logger.warning("Ice snowflake image not found: %s", SNOWFLAKE_IMAGE)
+        return
 
-    box = slide.shapes.add_textbox(left, top, width, height)
-    box.name = "iceSnowflake"
-    tf = box.text_frame
-    tf.clear()
-    tf.margin_left = 0
-    tf.margin_right = 0
-    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
-    p = tf.paragraphs[0]
-    p.text = SNOWFLAKE_GLYPH
-    p.alignment = PP_ALIGN.RIGHT
-    p.font.size = Pt(80)
-    p.font.bold = True
+    size = min(int(SNOWFLAKE_WIDTH), int(name_shape.height))
+    left = int(content_right - size)
+    top = int(name_shape.top + (name_shape.height - size) / 2)
+
+    pic = slide.shapes.add_picture(str(SNOWFLAKE_IMAGE), left, top, width=size, height=size)
+    pic.name = "iceSnowflake"
 
 
 def _layout_for_copy(template_slide, target_prs):
