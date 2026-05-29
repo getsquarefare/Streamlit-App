@@ -24,6 +24,7 @@ from src.stickers.shipping_sticker_generator_v3 import (
     copy_slide,
     add_code128_barcode,
     format_phone,
+    make_bag_barcode as make_bag_barcode_stable,
 )
 
 DEFAULT_BAG_TEMPLATE = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
@@ -77,18 +78,20 @@ def customization_tags_from_row(row):
     return " ".join(parts)
 
 
-def make_bag_barcode(row, index):
+def make_bag_barcode(row, chunk_index=0):
     """
-    Stable readable bag barcode.
-    Example: BAG-20260420-Z1-0001
+    Stable bag barcode (hash suffix) — same format as Shipping Sticker v3 / scanner.
+    Example: BAG-20260420-Z1-A3F29B
     """
-    delivery_date = str(unwrap(row.get("Delivery Date"), "")).replace("-", "")
-    zone = str(unwrap(row.get("ZONE_NUMBER"), "X")).replace("Zone", "").strip()
-
-    if not delivery_date:
-        delivery_date = datetime.now().strftime("%Y%m%d")
-
-    return f"BAG-{delivery_date}-Z{zone}-{index + 1:04d}"
+    shipping_info = {
+        "Delivery Date": unwrap(row.get("Delivery Date"), ""),
+        "Shipping Name": unwrap(row.get("Shipping Name"), ""),
+        "Shipping Address 1": unwrap(row.get("Shipping Address 1"), ""),
+        "Shipping Address 2": unwrap(row.get("Shipping Address 2"), ""),
+        "Shipping Postal Code": unwrap(row.get("Shipping Postal Code"), ""),
+        "Zone Number": unwrap(row.get("ZONE_NUMBER"), "X"),
+    }
+    return make_bag_barcode_stable(shipping_info, chunk_index)
 
 
 def get_open_orders_df(db):
@@ -190,7 +193,7 @@ def prepare_bag_dataframe(db):
     df_expanded["BAG_GROUP_KEY"] = df_expanded.apply(make_bag_group_key, axis=1)
 
     bag_rows = []
-    for bag_index, (_, group) in enumerate(df_expanded.groupby("BAG_GROUP_KEY", sort=False)):
+    for chunk_index, (_, group) in enumerate(df_expanded.groupby("BAG_GROUP_KEY", sort=False)):
         r0 = group.iloc[0]
         dishes = []
         household = set()
@@ -234,7 +237,8 @@ def prepare_bag_dataframe(db):
             "ICE_PACK_REQUIRED": ICE_PACK_TAG.lower() in tags_merged.lower(),
             "BAG_BARCODE": None,
         }
-        row_out["BAG_BARCODE"] = make_bag_barcode(row_out, bag_index)
+        # One bag per group — chunk_index 0 matches Shipping Sticker v3 hash for that address.
+        row_out["BAG_BARCODE"] = make_bag_barcode(row_out, 0)
         row_out["line_shippingName"] = row_out["Shipping Name"]
         row_out["line_address"] = (
             f"{row_out['Shipping Address 1']}, {row_out['Shipping Address 2']}"
@@ -422,5 +426,5 @@ if __name__ == "__main__":
     print(f"Saved PPT: {output_path}")
     ice_count = int(df["ICE_PACK_REQUIRED"].sum()) if "ICE_PACK_REQUIRED" in df.columns else 0
     if ice_count:
-        print(f"Ice-pack bags ({ice_count}): snowflake on name line (B&W friendly)")
+        print(f"Ice-pack bags ({ice_count}): snowflake.png on name line (B&W friendly)")
     print(f"Saved mapping: {BASE_DIR / 'bag_barcode_mapping.json'}")
