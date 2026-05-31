@@ -27,7 +27,7 @@ from src.stickers.shipping_sticker_generator_v3 import (
     make_bag_barcode as make_bag_barcode_stable,
 )
 
-DEFAULT_BAG_TEMPLATE = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
+DEFAULT_BAG_TEMPLATE = BASE_DIR / "template" / "Shipping_Sticker_Template_v3.pptx"
 
 ICE_PACK_TAG = "Ice Pack"
 

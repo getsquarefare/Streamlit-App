@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 VIEW = "viwDpTtU0qaT9NcvG"
 
-DEFAULT_BAG_TEMPLATE = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
+DEFAULT_BAG_TEMPLATE = BASE_DIR / "template" / "Shipping_Sticker_Template_v3.pptx"
 SNOWFLAKE_IMAGE = BASE_DIR / "template" / "snowflake.png"
 SNOWFLAKE_GLYPH = "❄"
 NAME_FONT_PT = 40
@@ -833,7 +833,7 @@ def upsert_bag_to_airtable(db, shipping_info):
 
 def create_shipping_stickers_barcode_ppt(db, shipping_list, template_path=None):
     if template_path is None:
-        template_path = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
+        template_path = BASE_DIR / "template" / "Shipping_Sticker_Template_v3.pptx"
 
     prs = Presentation(str(template_path))
 
@@ -869,7 +869,7 @@ def create_shipping_stickers_barcode_ppt(db, shipping_list, template_path=None):
 
 
 def generate_shipping_stickers_barcode(db):
-    template_path = BASE_DIR / "template" / "Shipping_Sticker_Template.pptx"
+    template_path = BASE_DIR / "template" / "Shipping_Sticker_Template_v3.pptx"
 
     shipping_list = process_order_data(db)
 
