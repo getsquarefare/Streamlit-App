@@ -276,7 +276,7 @@ def main():
         st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
         # Template file management
-        template_path = 'template/Shipping_Sticker_Template.pptx'
+        template_path = 'template/Shipping_Sticker_Template_v2.pptx'
 
         # Display existing template with download option
         if os.path.exists(template_path):
@@ -284,7 +284,7 @@ def main():
                 st.download_button(
                     label="⬇️ Download Existing Template",
                     data=template_file,
-                    file_name="Shipping_Sticker_Template.pptx",
+                    file_name="Shipping_Sticker_Template_v2.pptx",
                     mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     key="download_shipping_template"
                 )
@@ -358,14 +358,14 @@ def main():
         st.markdown("⚠️ Source Table: [Open Orders > For Shipping Stickers](https://airtable.com/appEe646yuQexwHJo/tblxT3Pg9Qh0BVZhM/viwDpTtU0qaT9NcvG?blocks=hide)")
         st.markdown("⚠️ If noticed any issues or missing data, please first check data in source table and then re-run the generator")
 
-        template_path_v3 = 'template/Shipping_Sticker_Template.pptx'
+        template_path_v3 = 'template/Shipping_Sticker_Template_v3.pptx'
 
         if os.path.exists(template_path_v3):
             with open(template_path_v3, "rb") as template_file:
                 st.download_button(
                     label="⬇️ Download Existing Template",
                     data=template_file,
-                    file_name="Shipping_Sticker_Template.pptx",
+                    file_name="Shipping_Sticker_Template_v3.pptx",
                     mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     key="download_shipping_template_v3"
                 )

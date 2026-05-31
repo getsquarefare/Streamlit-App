@@ -211,7 +211,7 @@ def populate_sticker(slide, shipping_info):
                 paragraph.font.size = Pt(28)
                 paragraph.font.name = "Lato"
 
-def create_shipping_stickers_ppt(shipping_list, template_path='template/Shipping_Sticker_Template.pptx'):
+def create_shipping_stickers_ppt(shipping_list, template_path='template/Shipping_Sticker_Template_v2.pptx'):
     """Create PowerPoint presentation with shipping stickers"""
     try:
         logger.info("Starting PowerPoint generation")
@@ -259,7 +259,7 @@ def create_shipping_stickers_ppt(shipping_list, template_path='template/Shipping
 
 def generate_shipping_stickers(db):
     """Main method to generate shipping stickers"""
-    template_path = 'template/Shipping_Sticker_Template.pptx'
+    template_path = 'template/Shipping_Sticker_Template_v2.pptx'
     try:
         logger.info("Starting shipping sticker generation")
 
