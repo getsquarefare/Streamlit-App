@@ -217,13 +217,16 @@ def consolidated_all_dishes_output(db, progress=None):
                     dish_meal[dish_id] = (meal_portion[0] if isinstance(meal_portion, list) and meal_portion else '') or ''
 
         # Meal tier sort: lunch/dinner → breakfast → L/D add-ons → snacks → snack add-ons
+        # A dish flagged as Breakfast in the weekly menu is always treated as breakfast,
+        # even if the order's meal portion says lunch/dinner.
         add_ons = set(db.get_all_add_ons())
+        breakfast_dishes = set(db.get_all_breakfast_dishes())
 
         def _dish_sort_rank(dish_id):
             meal = str(dish_meal.get(dish_id, '')).strip().lower()
             is_addon = dish_id in add_ons
             is_snack = 'snack' in meal
-            is_breakfast = 'breakfast' in meal
+            is_breakfast = 'breakfast' in meal or dish_id in breakfast_dishes
             if is_snack:
                 return 4 if is_addon else 3
             if is_addon:
