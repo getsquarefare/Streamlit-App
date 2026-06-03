@@ -138,14 +138,25 @@ class AirTable():
         Internal Dish IDs for rows marked Meals = "Add On" in the weekly menu table
         (tblZqBM26nx9QW1mN — shopify_product_table). Used for dish sticker sort order.
         """
-        formula = match({"Meals": "Add On"})
+        return self._get_dish_ids_by_meals_value("Add On")
+
+    def get_all_breakfast_dishes(self):
+        """
+        Internal Dish IDs for rows marked Meals = "Breakfast" in the weekly menu table.
+        Used to override sort tier: any dish flagged breakfast is always sorted into
+        the breakfast block even if a customer ordered it as lunch/dinner.
+        """
+        return self._get_dish_ids_by_meals_value("Breakfast")
+
+    def _get_dish_ids_by_meals_value(self, meals_value):
+        formula = match({"Meals": meals_value})
         try:
             records = self.shopify_product_table.all(
                 fields=["Internal Dish ID", "Meals"],
                 formula=formula,
             )
         except Exception as e:
-            logger.warning("Could not fetch add-ons from weekly menu table: %s", e)
+            logger.warning("Could not fetch dishes for Meals=%s from weekly menu table: %s", meals_value, e)
             return set()
 
         dish_ids = set()
