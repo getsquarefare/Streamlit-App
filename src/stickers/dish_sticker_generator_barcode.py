@@ -323,7 +323,7 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None, cancel_event=N
     return prs
 
 def read_client_serving(db):
-    fields_to_return = ['#', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts']
+    fields_to_return = ['#', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts','Meal Type from Profile (from Linked OrderItem)']
     try:
         # Initialize table
         records = db.get_clientservings_data(view=VIEW_ID)
@@ -369,8 +369,8 @@ def read_client_serving(db):
         #mark record yes in "add-on" if dish id is in add-ons
         df_flat['add-on'] = df_flat['Dish ID (from Linked OrderItem)'].apply(lambda x: 'yes' if x in add_ons else 'no')
         
-        # Derive meal from 'Meal Portion (from Linked OrderItem)' (linked field arrives as a list)
-        df_flat['meal'] = df_flat['Meal Portion (from Linked OrderItem)'].apply(
+        # Derive meal from 'Meal Type from Profile (from Linked OrderItem)' (linked field arrives as a list)
+        df_flat['meal'] = df_flat['Meal Type from Profile (from Linked OrderItem)'].apply(
             lambda x: (x[0] if isinstance(x, list) and x else x) or ''
         )
 

@@ -136,7 +136,7 @@ def one_dish_output(db, dish_id):
                 'Delivery Date': client_serving['fields']['Delivery Date'],
                 'Client': str(client_serving['fields']['Customer Name'][0]),
                 'Allergies': client_serving['fields'].get('Nutrition Notes (from Linked OrderItem)', [""])[0],
-                'Meal': client_serving['fields'].get('Meal Portion (from Linked OrderItem)', [''])[0].strip(),
+                'Meal': client_serving['fields'].get('MealType from Profile (from Linked OrderItem)', [''])[0].strip(),
                 'Sticker': client_serving['fields'].get('Meal Sticker (from Linked OrderItem)', [''])[0],
                 #'Dish': client_serving['fields'].get('Dish', [''])[0],
                 'All Deletions': deleted_ingredients_names,
@@ -199,7 +199,7 @@ def consolidated_all_dishes_output(db, progress=None):
     """Consolidate output for all dishes"""
     try:
         all_clientservings = db.clientserving_table.all(
-            fields=['Dish ID (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)'],
+            fields=['Dish ID (from Linked OrderItem)', 'MealType from Profile (from Linked OrderItem)'],
             view='viwgt50kLisz8jx7b'
         )
         if len(all_clientservings) == 0:
@@ -210,7 +210,7 @@ def consolidated_all_dishes_output(db, progress=None):
         dish_meal = {}
         for client_serving in all_clientservings:
             dish_ids = client_serving['fields'].get('Dish ID (from Linked OrderItem)', [])
-            meal_portion = client_serving['fields'].get('Meal Portion (from Linked OrderItem)', [])
+            meal_portion = client_serving['fields'].get('MealType from Profile (from Linked OrderItem)', [])
             if dish_ids:
                 dish_id = dish_ids[0]
                 if dish_id not in dish_meal:

@@ -482,47 +482,11 @@ class AirTable():
 
     def get_clientservings_one_dish(self, dish_id):
         """Get all client servings for a specific dish"""
-        # Field IDs - keeping original names as requested
-        CUSTOMER_NAME = 'fldDs6QXE6uYKIlRk'
-        MEAT = 'fldksE3QaxIIHzAIi'
-        DELIVERY_DATE = 'fld6YLCoS7XCFK04G'
-        DISH = 'fldmqHv4aXJxuJ8E2'
-        QUANTITY = 'fldfwdu2UKbcTve4a'
-        ALL_DELETIONS = 'fldzkTaNYfIBKxF11'
-        SAUCE = 'fldOb13TV0bymcyF6'
-        STARCH = 'fldZKmvAeBTY9tRkR'
-        VEGGIES_G = 'fldnPpqigL4HmN4jV'
-        GARNISH_G = 'fldpzKEyEiFA5vKIw'
-        LINKED_ORDERITEM = 'fld6tE8nDjVxSyEtb'
-        MEAT_G = 'fld4V0qMFWsCJ6VU7'
-        SAUCE_G = 'fldiudWDCfVwDGfrK'
-        STARCH_G = 'fldoyv8xZjZwQ9Loh'
-        VEGGIES = 'fldHaAZr6fiWZbNaf'
-        GARNISH = 'fldgrNa89SJKSPtwY'
-        REVIEW_NEEDED = 'fldzf5wNyvEvNQZ6N'
-        NUTRITION_NOTES_FROM_LINKED_ORDERITEM = 'fldq6CuqwGFg1v98H'
-        EXPLANATION = 'fldaugEJU01LZhlX7'
-        LAST_MODIFIED = 'fldV6RFrEYC7YrJT6'
-        UPDATED_NUTRITION_INFO = 'fldqV6jLeYa57gWly'
-        MEAL_PORTION_FROM_LINKED_ORDERITEM = 'fld00H3SpKNqTbhC0'
-        MEAL_STICKER = 'fldeUJtuijUAbklCQ'
-        DISH_ID = 'fldhrw7U0pV4D9Cad'
-        POSITION_ID = 'fldRWwXRTzUflOPgk'
-        NEW_INGREDIENTS = 'fldGJYhPkoWXgCw6W'
-        INGREDIENTS_TO_RECOMMEND = 'fldyxhwB2XWzXi43r'
-        FINAL_INGREDIENTS_WITH_USER_EDITS = 'fldngsHO3R0KIVEXa'
-        TAGS = 'fldGu2pk4yCqq45S9',
-        ORIGINAL_INGREDIENTS = 'fld7N0jthYBdgTrIL'
-        
-        fields_to_return = [CUSTOMER_NAME, MEAT, DELIVERY_DATE, DISH, QUANTITY, ALL_DELETIONS, SAUCE,
-                           STARCH, VEGGIES_G, GARNISH_G, LINKED_ORDERITEM, MEAT_G, SAUCE_G, STARCH_G, 
-                           VEGGIES, GARNISH, NUTRITION_NOTES_FROM_LINKED_ORDERITEM, 
-                           MEAL_PORTION_FROM_LINKED_ORDERITEM, MEAL_STICKER, DISH_ID, POSITION_ID, NEW_INGREDIENTS, INGREDIENTS_TO_RECOMMEND, FINAL_INGREDIENTS_WITH_USER_EDITS,TAGS,ORIGINAL_INGREDIENTS]
-        
         try:
+            DISH_ID = 'fldhrw7U0pV4D9Cad'
             filter_fields = {DISH_ID: dish_id}
             formula = match(filter_fields)
-            return self.clientserving_table.all(formula=formula, fields=fields_to_return,view='viwgt50kLisz8jx7b')
+            return self.clientserving_table.all(formula=formula,view='viwgt50kLisz8jx7b')
         except Exception as e:
             logger.error(f"Failed to get client servings for dish ID {dish_id}: {str(e)}")
             raise AirTableError(f"Failed to get client servings for dish ID {dish_id}: {str(e)}")
