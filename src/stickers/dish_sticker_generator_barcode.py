@@ -347,6 +347,10 @@ def read_client_serving(db):
                 lambda x: int(x[0]) if isinstance(x, list) and len(x) > 0 and str(x[0]).isdigit() 
                 else (int(x) if isinstance(x, (int, float)) else x)
             )
+        # Add any columns that Airtable omitted entirely (all records had no value for that field)
+        for col in fields_to_return:
+            if col not in df_flat.columns:
+                df_flat[col] = None
         df_flat = df_flat[fields_to_return]
 
         add_ons = db.get_all_add_ons()
