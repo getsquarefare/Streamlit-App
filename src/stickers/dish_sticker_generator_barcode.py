@@ -353,6 +353,12 @@ def read_client_serving(db):
                 df_flat[col] = None
         df_flat = df_flat[fields_to_return]
 
+        if 'Dish ID (from Linked OrderItem)' in df_flat.columns:
+            df_flat['Dish ID (from Linked OrderItem)'] = df_flat['Dish ID (from Linked OrderItem)'].apply(
+                lambda x: int(x[0]) if isinstance(x, list) and len(x) > 0 and str(x[0]).isdigit()
+                else (int(x) if isinstance(x, (int, float)) else x)
+            )
+
         add_ons = db.get_all_add_ons()
         breakfast_dishes = db.get_all_breakfast_dishes()
         print(f"Add-ons: {add_ons}")
