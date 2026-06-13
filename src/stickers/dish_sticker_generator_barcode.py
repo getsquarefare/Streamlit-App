@@ -323,7 +323,7 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None, cancel_event=N
     return prs
 
 def read_client_serving(db):
-    fields_to_return = ['#', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts','Meal Type from Profile (from Linked OrderItem)']
+    fields_to_return = ['#', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts','MealType from Profile (from Linked OrderItem)']
     try:
         # Initialize table
         records = db.get_clientservings_data(view=VIEW_ID)
@@ -342,11 +342,6 @@ def read_client_serving(db):
         else:
             df_flat = df
         
-        if 'Dish ID (from Linked OrderItem)' in df_flat.columns and 'Position Id' in df_flat.columns:
-            df_flat['Dish ID (from Linked OrderItem)'] = df_flat['Dish ID (from Linked OrderItem)'].apply(
-                lambda x: int(x[0]) if isinstance(x, list) and len(x) > 0 and str(x[0]).isdigit() 
-                else (int(x) if isinstance(x, (int, float)) else x)
-            )
         # Add any columns that Airtable omitted entirely (all records had no value for that field)
         for col in fields_to_return:
             if col not in df_flat.columns:
@@ -380,7 +375,7 @@ def read_client_serving(db):
         df_flat['add-on'] = df_flat['Dish ID (from Linked OrderItem)'].apply(lambda x: 'yes' if x in add_ons else 'no')
         
         # Derive meal from 'Meal Type from Profile (from Linked OrderItem)' (linked field arrives as a list)
-        df_flat['meal'] = df_flat['Meal Type from Profile (from Linked OrderItem)'].apply(
+        df_flat['meal'] = df_flat['MealType from Profile (from Linked OrderItem)'].apply(
             lambda x: (x[0] if isinstance(x, list) and x else x) or ''
         )
 
