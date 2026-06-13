@@ -46,7 +46,7 @@ def process_order_data(db):
                 continue
 
             # Calculate quantity based on meal type from profile
-            meal_portion = fields.get('Meal Type from Profile', '')
+            meal_portion = fields.get('MealType from Profile', '')
             quantity = fields.get('Quantity', 0)
 
             if meal_portion == 'Breakfast':
