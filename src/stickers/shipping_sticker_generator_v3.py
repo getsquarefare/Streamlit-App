@@ -200,7 +200,7 @@ def process_order_data(db):
             logger.warning(f"Skipping order with missing fields: {order.get('id', 'unknown')}")
             continue
 
-        meal_portion = unwrap(fields.get("Meal Portion", ""))
+        meal_portion = unwrap(fields.get("MealType from Profile", ""))
         quantity = unwrap(fields.get("Quantity", 0), 0)
 
         try:

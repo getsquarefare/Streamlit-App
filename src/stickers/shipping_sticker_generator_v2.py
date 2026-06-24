@@ -45,8 +45,8 @@ def process_order_data(db):
                 logger.warning(f"Skipping order with missing fields: {order.get('id', 'unknown')}")
                 continue
 
-            # Calculate quantity based on meal portion
-            meal_portion = fields.get('Meal Portion', '')
+            # Calculate quantity based on meal type from profile
+            meal_portion = fields.get('MealType from Profile', '')
             quantity = fields.get('Quantity', 0)
 
             if meal_portion == 'Breakfast':

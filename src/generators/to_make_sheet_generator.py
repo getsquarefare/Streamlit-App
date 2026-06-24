@@ -190,7 +190,7 @@ def group_ingredients_by_component(db,client_servings):
         for ingredient_name, grams in modified_recipe.items():
 
             # Remove ID prefix from ingredient name (e.g. "16137 Hummus" -> "Hummus")
-            clean_ingredient_name = ' '.join(ingredient_name.split(' ')[1:]).strip()
+            clean_ingredient_name = ' '.join(ingredient_name.split(' ')[1:]).strip().replace('\n', '')
 
             # Track ingredients that come from snacks
             if is_snack:
@@ -931,7 +931,7 @@ def generate_to_make_sheet(db):
 
 
 if __name__ == "__main__":
-    from store_access import new_database_access
+    from src.data.store_access import new_database_access
     try:
         db = new_database_access()  
         excel_file = generate_to_make_sheet(db)

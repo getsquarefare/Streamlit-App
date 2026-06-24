@@ -31,7 +31,8 @@ def get_open_orders(db):
         'CUSTOMER_NAME': 'fldWYJStYSpX72pG3',
         'PARTS': 'fldebKYuTeuQfauil',
         'ZONE_NUMBER': 'fldbL18Ixas6ong0j',
-        'SHIPPING_NAME': 'fldIEhlbz7JzbpTOK'
+        'SHIPPING_NAME': 'fldIEhlbz7JzbpTOK',
+        'MEAL_TYPE_FROM_PROFILE': 'fldGqQtz9zyJmMDq9',
     }
     data = db.get_all_open_orders(view='viwuVy9aN2LLZrcPF')
     # Create DataFrame and map column names
@@ -72,7 +73,7 @@ def process_data(db):
     required_cols = [
         'Delivery Date', 'Meal Sticker', 'Meal Portion', 'To_Match_Client_Nutrition',
         'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
-        'Shipping Province', 'Shipping Postal Code', 'Customer Name','# of Parts','Zone Number (from Delivery Zone)','Shipping Name'
+        'Shipping Province', 'Shipping Postal Code', 'Customer Name','# of Parts','Zone Number (from Delivery Zone)','Shipping Name','Meal Type from Profile',
     ]
 
     # Ensure all required columns exist (missing ones will be created and filled with "")
@@ -104,8 +105,8 @@ def process_data(db):
     
     # Determine portions based on order type
     df_orders['Portions'] = df_orders.apply(
-        lambda row: 0.5 if row['Meal Portion'] == 'Breakfast' 
-                else (0.25 if row['Meal Portion'] == 'Snack' else 1),
+        lambda row: 0.5 if row['Meal Type from Profile'] == 'Breakfast' 
+                else (0.25 if row['Meal Type from Profile'] == 'Snack' else 1),
         axis=1
     )
     

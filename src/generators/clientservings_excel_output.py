@@ -136,7 +136,7 @@ def one_dish_output(db, dish_id):
                 'Delivery Date': client_serving['fields']['Delivery Date'],
                 'Client': str(client_serving['fields']['Customer Name'][0]),
                 'Allergies': client_serving['fields'].get('Nutrition Notes (from Linked OrderItem)', [""])[0],
-                'Meal': client_serving['fields'].get('Meal Portion (from Linked OrderItem)', [''])[0].strip(),
+                'Meal': client_serving['fields'].get('MealType from Profile (from Linked OrderItem)', [''])[0].strip(),
                 'Sticker': client_serving['fields'].get('Meal Sticker (from Linked OrderItem)', [''])[0],
                 #'Dish': client_serving['fields'].get('Dish', [''])[0],
                 'All Deletions': deleted_ingredients_names,
@@ -199,7 +199,7 @@ def consolidated_all_dishes_output(db, progress=None):
     """Consolidate output for all dishes"""
     try:
         all_clientservings = db.clientserving_table.all(
-            fields=['Dish ID (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)'],
+            fields=['Dish ID (from Linked OrderItem)', 'MealType from Profile (from Linked OrderItem)'],
             view='viwgt50kLisz8jx7b'
         )
         if len(all_clientservings) == 0:
@@ -210,20 +210,23 @@ def consolidated_all_dishes_output(db, progress=None):
         dish_meal = {}
         for client_serving in all_clientservings:
             dish_ids = client_serving['fields'].get('Dish ID (from Linked OrderItem)', [])
-            meal_portion = client_serving['fields'].get('Meal Portion (from Linked OrderItem)', [])
+            meal_portion = client_serving['fields'].get('MealType from Profile (from Linked OrderItem)', [])
             if dish_ids:
                 dish_id = dish_ids[0]
                 if dish_id not in dish_meal:
                     dish_meal[dish_id] = (meal_portion[0] if isinstance(meal_portion, list) and meal_portion else '') or ''
 
         # Meal tier sort: lunch/dinner → breakfast → L/D add-ons → snacks → snack add-ons
+        # A dish flagged as Breakfast in the weekly menu is always treated as breakfast,
+        # even if the order's meal portion says lunch/dinner.
         add_ons = set(db.get_all_add_ons())
+        breakfast_dishes = set(db.get_all_breakfast_dishes())
 
         def _dish_sort_rank(dish_id):
             meal = str(dish_meal.get(dish_id, '')).strip().lower()
             is_addon = dish_id in add_ons
             is_snack = 'snack' in meal
-            is_breakfast = 'breakfast' in meal
+            is_breakfast = 'breakfast' in meal or dish_id in breakfast_dishes
             if is_snack:
                 return 4 if is_addon else 3
             if is_addon:

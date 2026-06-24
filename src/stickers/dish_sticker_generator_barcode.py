@@ -263,13 +263,11 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None, cancel_event=N
         progress["slide_count"] = 0
 
     slide_count = 0
-    # Iterate by part number first (all Part 1s, then all Part 2s, etc.)
-    for part_num in range(max_parts):
-        # Filter to only rows that have this part number
-        rows_with_part = df[df['parts'] > part_num]
-        print(f"Part {part_num + 1}: processing {len(rows_with_part)} rows")
-
-        for idx, row in rows_with_part.iterrows():
+    # Iterate row-by-row so all parts of the same client serving stay adjacent
+    # (Part 1 immediately followed by Part 2, etc.)
+    for idx, row in df.iterrows():
+        parts_count = int(row['parts'])
+        for part_num in range(parts_count):
             if cancel_event is not None and cancel_event.is_set():
                 return prs
             slide_count += 1
@@ -325,7 +323,7 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None, cancel_event=N
     return prs
 
 def read_client_serving(db):
-    fields_to_return = ['#', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts']
+    fields_to_return = ['#', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts','MealType from Profile (from Linked OrderItem)']
     try:
         # Initialize table
         records = db.get_clientservings_data(view=VIEW_ID)
@@ -344,15 +342,22 @@ def read_client_serving(db):
         else:
             df_flat = df
         
-        if 'Dish ID (from Linked OrderItem)' in df_flat.columns and 'Position Id' in df_flat.columns:
-            df_flat['Dish ID (from Linked OrderItem)'] = df_flat['Dish ID (from Linked OrderItem)'].apply(
-                lambda x: int(x[0]) if isinstance(x, list) and len(x) > 0 and str(x[0]).isdigit() 
-                else (int(x) if isinstance(x, (int, float)) else x)
-            )
+        # Add any columns that Airtable omitted entirely (all records had no value for that field)
+        for col in fields_to_return:
+            if col not in df_flat.columns:
+                df_flat[col] = None
         df_flat = df_flat[fields_to_return]
 
+        if 'Dish ID (from Linked OrderItem)' in df_flat.columns:
+            df_flat['Dish ID (from Linked OrderItem)'] = df_flat['Dish ID (from Linked OrderItem)'].apply(
+                lambda x: int(x[0]) if isinstance(x, list) and len(x) > 0 and str(x[0]).isdigit()
+                else (int(x) if isinstance(x, (int, float)) else x)
+            )
+
         add_ons = db.get_all_add_ons()
+        breakfast_dishes = db.get_all_breakfast_dishes()
         print(f"Add-ons: {add_ons}")
+        print(f"Breakfast dishes: {breakfast_dishes}")
 
         df_flat = df_flat.fillna('N/A')
     
@@ -369,17 +374,20 @@ def read_client_serving(db):
         #mark record yes in "add-on" if dish id is in add-ons
         df_flat['add-on'] = df_flat['Dish ID (from Linked OrderItem)'].apply(lambda x: 'yes' if x in add_ons else 'no')
         
-        # Derive meal from 'Meal Portion (from Linked OrderItem)' (linked field arrives as a list)
-        df_flat['meal'] = df_flat['Meal Portion (from Linked OrderItem)'].apply(
+        # Derive meal from 'Meal Type from Profile (from Linked OrderItem)' (linked field arrives as a list)
+        df_flat['meal'] = df_flat['MealType from Profile (from Linked OrderItem)'].apply(
             lambda x: (x[0] if isinstance(x, list) and x else x) or ''
         )
 
         # Sort order: lunch/dinner → breakfast → lunch&dinner add-ons → snacks → snacks add-ons
+        # A dish flagged as Breakfast in the weekly menu is ALWAYS treated as breakfast,
+        # even if the customer's order meal portion says lunch/dinner.
         def _sort_rank(row):
             meal = str(row['meal']).strip().lower()
+            dish_id = row['Dish ID (from Linked OrderItem)']
             is_addon = row['add-on'] == 'yes'
             is_snack = 'snack' in meal
-            is_breakfast = 'breakfast' in meal
+            is_breakfast = 'breakfast' in meal or dish_id in breakfast_dishes
             if is_snack:
                 return 4 if is_addon else 3
             if is_addon:
