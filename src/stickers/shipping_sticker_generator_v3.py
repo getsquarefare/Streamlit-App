@@ -312,9 +312,25 @@ def process_order_data(db):
             shipping_list.append(bag)
 
     total_stickers = sum(b["Stickers Needed"] for b in shipping_list)
+
+    # Print order: zone (numeric), then customer/shipping name A–Z within each zone.
+    def _bag_sort_key(bag):
+        zone_raw = str(bag.get("Zone Number", "")).strip()
+        try:
+            zone_sort = (0, int(float(zone_raw)))
+        except (ValueError, TypeError):
+            zone_sort = (1, zone_raw.lower())
+        return (
+            zone_sort,
+            str(bag.get("Shipping Name", "")).strip().lower(),
+            str(bag.get("Bag Barcode", "")).strip().lower(),
+        )
+
+    shipping_list.sort(key=_bag_sort_key)
+
     logger.info(
         f"Processed {len(shipping_list)} bag records ({total_stickers} stickers, "
-        f"{STICKERS_PER_BAG} per bag)"
+        f"{STICKERS_PER_BAG} per bag) — sorted by zone, then name A–Z"
     )
 
     return shipping_list
