@@ -20,6 +20,7 @@ class AirTable():
         # Load environment variables from the .env file
         load_dotenv()
         self.conversion_cache = {}
+        self.sub_breakdown_cache = {}
         
         # Get the API key from environment variables or the passed argument
         self.api_key = ex_api_key or st.secrets["AIRTABLE_API_KEY"]
@@ -479,6 +480,31 @@ class AirTable():
              # Cache the default value
             self.conversion_cache[ingredient_name] = 1.0
             raise AirTableError(f"Error getting conversion factor for '{ingredient_name}': {str(e)}")
+
+    def get_ingredient_sub_breakdown(self, ingredient_name):
+        """Get parsed Sub-ingredients Breakdown list for a composed SF ingredient, with caching."""
+        if ingredient_name in self.sub_breakdown_cache:
+            return self.sub_breakdown_cache[ingredient_name]
+
+        try:
+            INGREDIENT_ID = 'flduR79GRxTbyfyKe'
+            formula = match({INGREDIENT_ID: ingredient_name})
+            records = self.ingredients_table.all(formula=formula)
+
+            result = None
+            if records:
+                breakdown_raw = records[0]['fields'].get('Sub-ingredients Breakdown')
+                if breakdown_raw:
+                    import json
+                    result = json.loads(breakdown_raw) if isinstance(breakdown_raw, str) else breakdown_raw
+
+            self.sub_breakdown_cache[ingredient_name] = result
+            return result
+
+        except Exception as e:
+            logger.warning(f"Error getting sub-ingredients breakdown for '{ingredient_name}': {str(e)}")
+            self.sub_breakdown_cache[ingredient_name] = None
+            return None
 
     def get_clientservings_one_dish(self, dish_id):
         """Get all client servings for a specific dish"""

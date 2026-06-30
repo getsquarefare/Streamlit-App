@@ -108,6 +108,37 @@ def identify_fruits_with_openai(ingredient_names):
         logger.warning(f"Error identifying fruits with OpenAI: {str(e)}")
         return set()
 
+def identify_main_ingredients_by_sub_ingredients_weight(sub_ingredients_breakdown):
+    """
+    Given a parsed Sub-ingredients Breakdown list, returns the ratio
+    (dominant_ingredient_inputGrams / total_inputGrams) when one sub-ingredient
+    exceeds 80% of the total weight. Returns 1.0 otherwise (use full weight as-is).
+
+    Example: Chinese Broccoli 100g + Water 5g → ratio = 100/105 ≈ 0.952
+    Applied as: final_grams = (raw_grams / conversion_factor) * ratio
+    """
+    if not sub_ingredients_breakdown:
+        return 1.0
+
+    try:
+        total_grams = sum(item['inputGrams'] for item in sub_ingredients_breakdown)
+        if total_grams == 0:
+            return 1.0
+
+        for item in sub_ingredients_breakdown:
+            if item['inputGrams'] / total_grams > 0.8:
+                name = item.get('record', {}).get('name', '')
+                if 'water' in name.lower():
+                    return 1.0
+                return item['inputGrams'] / total_grams
+
+        return 1.0
+
+    except Exception as e:
+        logger.warning(f"Error identifying main sub-ingredient by weight: {e}")
+        return 1.0
+
+
 
 def group_ingredients_by_component(db,client_servings):
     """Group all ingredients by component type from client servings using Modified Recipe Details"""
@@ -216,6 +247,14 @@ def group_ingredients_by_component(db,client_servings):
             # Apply raw/cooked conversion factor
             conversion_factor = db.get_ingredient_conversion_factor(ingredient_name.strip())
             final_grams = grams_float / conversion_factor if conversion_factor != 0 else grams_float
+
+            # For composed SF ingredients, scale by the dominant sub-ingredient ratio
+            if clean_ingredient_name.lower().startswith('sf '):
+                sub_breakdown = db.get_ingredient_sub_breakdown(ingredient_name.strip())
+                ratio = identify_main_ingredients_by_sub_ingredients_weight(sub_breakdown)
+                if ratio < 1.0:
+                    logger.info(f"SF ingredient '{clean_ingredient_name}': applying sub-ingredient ratio {ratio:.4f}")
+                final_grams *= ratio
 
             total_grams += final_grams
 
