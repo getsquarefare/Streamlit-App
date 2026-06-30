@@ -125,14 +125,18 @@ def identify_main_ingredients_by_sub_ingredients_weight(sub_ingredients_breakdow
         if total_grams == 0:
             return 1.0
 
-        for item in sub_ingredients_breakdown:
-            if item['inputGrams'] / total_grams > 0.8:
-                name = item.get('record', {}).get('name', '')
-                if 'water' in name.lower():
-                    return 1.0
-                return item['inputGrams'] / total_grams
+        sorted_items = sorted(sub_ingredients_breakdown, key=lambda x: x['inputGrams'], reverse=True)
+        top = sorted_items[0]
 
-        return 1.0
+        if top['inputGrams'] / total_grams < 0.8:
+            return 1.0
+
+        top_name = top.get('record', {}).get('name', '')
+        if 'water' in top_name.lower() and len(sorted_items) > 1:
+            second = sorted_items[1]
+            return second['inputGrams'] / total_grams
+
+        return top['inputGrams'] / total_grams
 
     except Exception as e:
         logger.warning(f"Error identifying main sub-ingredient by weight: {e}")
@@ -249,7 +253,7 @@ def group_ingredients_by_component(db,client_servings):
             final_grams = grams_float / conversion_factor if conversion_factor != 0 else grams_float
 
             # For composed SF ingredients, scale by the dominant sub-ingredient ratio
-            if clean_ingredient_name.lower().startswith('sf '):
+            if ingredient_name.lower().startswith('sf '):
                 sub_breakdown = db.get_ingredient_sub_breakdown(ingredient_name.strip())
                 ratio = identify_main_ingredients_by_sub_ingredients_weight(sub_breakdown)
                 if ratio < 1.0:
