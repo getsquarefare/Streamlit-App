@@ -123,14 +123,15 @@ def identify_main_ingredients_by_sub_ingredients_weight(sub_ingredients_breakdow
     try:
         non_water_items = [item for item in sub_ingredients_breakdown
                            if 'water' not in item.get('record', {}).get('name', '').lower()]
-        total_grams = sum(item['inputGrams'] for item in non_water_items)
-        if total_grams == 0:
-            return 1.0
+        total_grams_non_water = sum(item['inputGrams'] for item in non_water_items)
+        total_grams = sum(item['inputGrams'] for item in sub_ingredients_breakdown)
 
+        if total_grams_non_water == 0:
+            return 1.0
         sorted_items = sorted(non_water_items, key=lambda x: x['inputGrams'], reverse=True)
         top = sorted_items[0]
 
-        if top['inputGrams'] / total_grams < 0.8:
+        if top['inputGrams'] / total_grams_non_water < 0.8:
             return 1.0
 
         return top['inputGrams'] / total_grams
