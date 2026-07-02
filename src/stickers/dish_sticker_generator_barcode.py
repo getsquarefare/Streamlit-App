@@ -388,7 +388,7 @@ def read_client_serving(db):
             is_addon = row['add-on'] == 'yes'
             is_snack = 'snack' in meal
             is_breakfast = 'breakfast' in meal or dish_id in breakfast_dishes
-            if is_snack:
+            if is_snack and not is_breakfast:
                 return 4 if is_addon else 3
             if is_addon:
                 return 2  # lunch/dinner add-ons
