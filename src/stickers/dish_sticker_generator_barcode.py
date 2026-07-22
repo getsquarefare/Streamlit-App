@@ -263,11 +263,13 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None, cancel_event=N
         progress["slide_count"] = 0
 
     slide_count = 0
-    # Iterate row-by-row so all parts of the same client serving stay adjacent
-    # (Part 1 immediately followed by Part 2, etc.)
-    for idx, row in df.iterrows():
-        parts_count = int(row['parts'])
-        for part_num in range(parts_count):
+    # Iterate by part number first (all Part 1s, then all Part 2s, etc.)
+    for part_num in range(max_parts):
+        # Filter to only rows that have this part number
+        rows_with_part = df[df['parts'] > part_num]
+        print(f"Part {part_num + 1}: processing {len(rows_with_part)} rows")
+
+        for idx, row in rows_with_part.iterrows():
             if cancel_event is not None and cancel_event.is_set():
                 return prs
             slide_count += 1
