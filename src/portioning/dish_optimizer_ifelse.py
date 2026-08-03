@@ -1105,7 +1105,7 @@ class NewDishOptimizer:
                 elif not self.is_special_fruit_snack and not self.is_special_yogurt_protein:
                     nutrition_ratio = (
                         self.customer_requirements['protein(g)'] / initial_nutrition['protein(g)'] * 0.9 if ing['component'] == 'protein' and initial_nutrition['protein(g)'] > 0
-                        else self.customer_requirements['carbohydrate(g)'] / initial_nutrition['carbohydrate(g)'] * 0.5 if ing['component'] == 'starch' and initial_nutrition['carbohydrate(g)'] > 0
+                        else self.customer_requirements['carbohydrate(g)'] / initial_nutrition['carbohydrate(g)'] * 0.3 if ing['component'] == 'starch' and initial_nutrition['carbohydrate(g)'] > 0
                         else self.customer_requirements['dietaryFiber(g)'] / initial_nutrition['dietaryFiber(g)'] if ing['component'] == 'veggies' and initial_nutrition['dietaryFiber(g)'] > 0
                         else 1.0
                     )
@@ -1113,7 +1113,7 @@ class NewDishOptimizer:
                 else:
                     nutrition_ratio = (
                         self.customer_requirements['protein(g)'] / initial_nutrition['protein(g)'] * 0.9 if ing['component'] == 'protein' and initial_nutrition['protein(g)'] > 0
-                        else self.customer_requirements['carbohydrate(g)'] / initial_nutrition['carbohydrate(g)'] * 0.5 if ing['component'] == 'starch' and initial_nutrition['carbohydrate(g)'] > 0
+                        else self.customer_requirements['carbohydrate(g)'] / initial_nutrition['carbohydrate(g)'] * 0.3 if ing['component'] == 'starch' and initial_nutrition['carbohydrate(g)'] > 0
                         else self.customer_requirements['dietaryFiber(g)'] / initial_nutrition['dietaryFiber(g)'] if ing['component'] == 'veggies' and initial_nutrition['dietaryFiber(g)'] > 0
                         else 1.0
                     )
