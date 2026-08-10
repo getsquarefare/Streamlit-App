@@ -188,15 +188,6 @@ def _build_pdf(pivot_data, ingredient_totals):
 
 
 def generate_kitchen_pivot(db) -> io.BytesIO:
-    """
-    Main entry point called by streamlitController.py via CancellableTask.
-    Fetches the 'Pivot Table' view — whatever the CEO filtered in Airtable.
-    Returns PDF bytes for st.download_button.
-
-    % Overall Production is calculated against ALL records in the table
-    (not just the filtered view) so filtering to one dish doesn't make
-    everything show 100%.
-    """
     # Filtered records
     filtered_records = db.get_kitchen_screen_data(view=PIVOT_VIEW)
 

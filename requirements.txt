@@ -9,6 +9,7 @@ altair
 # File processing
 openpyxl
 python-pptx
+reportlab
 
 # API and external services
 openai
