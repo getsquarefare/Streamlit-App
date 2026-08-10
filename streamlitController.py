@@ -23,6 +23,7 @@ from src.data.store_access import new_database_access
 from src.generators.clientservings_excel_output import *
 from src.generators.to_make_sheet_generator import *
 from src.utils.cancellable import CancellableTask
+from src.generators.kitchen_screen_pivot_generator import generate_kitchen_pivot
 
 # Streamlit app
 def main():
@@ -722,6 +723,43 @@ def main():
                 task.start()
                 st.session_state.to_make_sheet_task = task
                 st.rerun()
+
+    # kitchen_screen_pivot_generator
+    st.header('Kitchen Screen Pivot Table 📊')
+    with st.expander('Expand to see more details'):
+        st.markdown(
+            "⚠️ Source: [Kitchen Screen Setup → Pivot Table view]"
+            "(https://airtable.com/appEe646yuQexwHJo/tblNZQiFdZQzoLkVt?blocks=hide)\n\n"
+        )
+ 
+        kitchen_pivot_task = st.session_state.get("kitchen_pivot_task")
+    
+        if kitchen_pivot_task is not None and not kitchen_pivot_task.is_done():
+            elapsed_str = str(timedelta(seconds=int(kitchen_pivot_task.elapsed())))
+            st.info(f"Generating Kitchen Pivot PDF… 🕐 {elapsed_str}")
+            time.sleep(2)
+            st.rerun()
+    
+        elif kitchen_pivot_task is not None and kitchen_pivot_task.is_done():
+            elapsed_str = str(timedelta(seconds=int(kitchen_pivot_task.elapsed())))
+    
+            if kitchen_pivot_task.error is not None:
+                st.error(f"Error generating Kitchen Pivot: {kitchen_pivot_task.error}")
+            else:
+                st.download_button(
+                    label="⬇️ Download Kitchen Pivot (PDF)",
+                    data=kitchen_pivot_task.result,
+                    file_name=f"{current_date_time}_kitchen_pivot.pdf",
+                    mime="application/pdf",
+                    key="kitchen_pivot_download",
+                )
+                st.success(f"Kitchen Pivot PDF generated in {elapsed_str}! ✅")
+    
+        if st.button("Generate Kitchen Screen Pivot"):
+            task = CancellableTask(lambda cancel_event=None: generate_kitchen_pivot(db))
+            task.start()
+            st.session_state.kitchen_pivot_task = task
+            st.rerun()
 
 if __name__ == "__main__":
     main()

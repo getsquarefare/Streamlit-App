@@ -40,6 +40,7 @@ class AirTable():
         self.shopify_product_table = Table(self.api_key, self.base_id, 'tblZqBM26nx9QW1mN')
         self.shopify_variants_table = Table(self.api_key, self.base_id, 'tblonWG8wVPVA9w82')
         self.bag_tracking_table = Table(self.api_key, self.base_id, 'tblI7GQIwoGRrPQwz')
+        self.kitchen_screen_table = Table(self.api_key, self.base_id, 'tblNZQiFdZQzoLkVt')
 
     def get_ingredient_details_by_rcd_id(self, id):
         ingredient = self.ingredients_table.get(id)['fields']
@@ -653,6 +654,15 @@ class AirTable():
         fields = records[0].get("fields", {})
         fields["record_id"] = records[0].get("id")
         return fields
+
+    def get_kitchen_screen_data(self, view=None):
+        try:
+            if view:
+                return self.kitchen_screen_table.all(view=view)
+            else:
+                return self.kitchen_screen_table.all()
+        except Exception as e:
+            raise AirTableError(f"Failed to get kitchen screen data: {str(e)}")
 
 
 def new_database_access():
