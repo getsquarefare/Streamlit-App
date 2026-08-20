@@ -78,7 +78,7 @@ def identify_fruits_with_openai(ingredient_names):
     try:
         # Create prompt for fruit identification
         prompt = f"""
-        Given the following list of food ingredients, identify which ones are fruits.
+        Given the following list of food ingredients, identify which ones are RAW fruits. It does not include any roasted, sautéed, or other cooked items.
         Return only the fruit names as a comma-separated list, nothing else. Dont change any ingredient names.
         
         Ingredients: {', '.join(ingredient_names)}
@@ -108,36 +108,48 @@ def identify_fruits_with_openai(ingredient_names):
         logger.warning(f"Error identifying fruits with OpenAI: {str(e)}")
         return set()
 
-def identify_main_ingredients_by_sub_ingredients_weight(sub_ingredients_breakdown):
+def is_water(sub_ingredient_name):
     """
-    Given a parsed Sub-ingredients Breakdown list, returns the ratio
-    (dominant_ingredient_inputGrams / total_inputGrams) when one sub-ingredient
-    exceeds 80% of the total weight. Returns 1.0 otherwise (use full weight as-is).
+    True only for the Water ingredient itself.
 
-    Example: Chinese Broccoli 100g + Water 5g → ratio = 100/105 ≈ 0.952
+    Sub-ingredient names arrive ID-prefixed ("2710707 Water"), and a substring
+    test would also match Watercress, Watermelon, Watermelon Radish and Coconut
+    Water — all real food that has to stay in the count.
+    """
+    without_id = ' '.join(sub_ingredient_name.split(' ')[1:]) or sub_ingredient_name
+    return without_id.strip().lower() == 'water'
+
+def non_water_ratio(sub_ingredients_breakdown):
+    """
+    Given a parsed Sub-ingredients Breakdown list, returns the fraction of the
+    composed ingredient's raw input weight that is not water.
+
+    Cooked/Raw Conversion is authored against the full raw input (water included),
+    so scaling by this ratio leaves the weight that actually has to be bought.
+
+    Example: Basmati Rice 35g + Tomato Puree 12g + oil/seasoning 6.5g + Water 70g
+             → ratio = 53.5/123.5 ≈ 0.433
     Applied as: final_grams = (raw_grams / conversion_factor) * ratio
     """
     if not sub_ingredients_breakdown:
         return 1.0
 
     try:
-        non_water_items = [item for item in sub_ingredients_breakdown
-                           if 'water' not in item.get('record', {}).get('name', '').lower()]
-        total_grams_non_water = sum(item['inputGrams'] for item in non_water_items)
         total_grams = sum(item['inputGrams'] for item in sub_ingredients_breakdown)
-
-        if total_grams_non_water == 0:
-            return 1.0
-        sorted_items = sorted(non_water_items, key=lambda x: x['inputGrams'], reverse=True)
-        top = sorted_items[0]
-
-        if top['inputGrams'] / total_grams_non_water < 0.8:
+        if total_grams <= 0:
             return 1.0
 
-        return top['inputGrams'] / total_grams
+        non_water_grams = sum(item['inputGrams'] for item in sub_ingredients_breakdown
+                              if not is_water(item.get('record', {}).get('name', '')))
+
+        if non_water_grams <= 0:
+            logger.warning("Sub-ingredient breakdown is entirely water, leaving weight unscaled")
+            return 1.0
+
+        return non_water_grams / total_grams
 
     except Exception as e:
-        logger.warning(f"Error identifying main sub-ingredient by weight: {e}")
+        logger.warning(f"Error computing non-water ratio: {e}")
         return 1.0
 
 
@@ -250,12 +262,12 @@ def group_ingredients_by_component(db,client_servings):
             conversion_factor = db.get_ingredient_conversion_factor(ingredient_name.strip())
             final_grams = grams_float / conversion_factor if conversion_factor != 0 else grams_float
 
-            # For composed SF ingredients, scale by the dominant sub-ingredient ratio
+            # For composed SF ingredients, take the water back out of the raw batch weight
             if ingredient_name.lower().startswith('sf '):
                 sub_breakdown = db.get_ingredient_sub_breakdown(ingredient_name.strip())
-                ratio = identify_main_ingredients_by_sub_ingredients_weight(sub_breakdown)
+                ratio = non_water_ratio(sub_breakdown)
                 if ratio < 1.0:
-                    logger.info(f"SF ingredient '{clean_ingredient_name}': applying sub-ingredient ratio {ratio:.4f}")
+                    logger.info(f"SF ingredient '{clean_ingredient_name}': excluding water, ratio {ratio:.4f}")
                 final_grams *= ratio
 
             total_grams += final_grams
