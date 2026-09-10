@@ -133,6 +133,8 @@ def process_data(db):
     
     # Process nutrition information
     for _, row in df_clients.iterrows():
+        # Reset per row so a record with no goals doesn't inherit the previous row's line
+        nutrition_line = ''
         if 'Customization Tags' in row and isinstance(row['Customization Tags'], list) and "No Nutrition Data in Sheet" in row['Customization Tags']:
             nutrition_line = ''
         elif 'goal_calories' in row and not pd.isna(row['goal_calories']) and row['goal_calories'] > 0:
@@ -148,12 +150,7 @@ def process_data(db):
                 nutrition_line += f"{int(row['goal_fiber(g)'])}g fiber"
         
         df_clients.loc[_, 'NUTRITION'] = nutrition_line
-    
-    # Group the nutrition info
-    df_clients['NUTRITION'] = df_clients.groupby('CLIENT')['NUTRITION'].apply(
-        lambda x: '\n'.join(filter(None, x))
-    ).reset_index(drop=True)
-    
+
     # Extract the relevant parts of the ID for grouping
     df_clients['group_key'] = df_clients['identifier'].apply(lambda x: "".join(x.split("|")[::2]) if isinstance(x, str) else x)
     
