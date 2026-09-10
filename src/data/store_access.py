@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from functools import cache
 import streamlit as st
 from src.data.exceptions import AirTableError, AirtableDataError
+from src.config import get_secret
 import logging
 
 # Set up logging
@@ -23,8 +24,12 @@ class AirTable():
         self.sub_breakdown_cache = {}
         
         # Get the API key from environment variables or the passed argument
-        self.api_key = ex_api_key or st.secrets["AIRTABLE_API_KEY"]
-        self.base_id = "appEe646yuQexwHJo"
+        self.api_key = ex_api_key or get_secret("AIRTABLE_API_KEY")
+        if not self.api_key:
+            raise AirTableError("AIRTABLE_API_KEY not found. Set it in .env or .streamlit/secrets.toml.")
+        self.base_id = get_secret("AIRTABLE_BASE_ID")
+        if not self.base_id:
+            raise AirTableError("AIRTABLE_BASE_ID not found. Set it in .env or .streamlit/secrets.toml.")
         
         # Initialize tables
         self.ingredients_table = Table(self.api_key, self.base_id, 'tblPhcO06ce4VcAPD')

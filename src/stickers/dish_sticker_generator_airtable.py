@@ -8,6 +8,7 @@ from pyairtable.api.table import Table
 from pyairtable.formulas import match
 import os
 from dotenv import load_dotenv
+from src.config import get_secret
 from functools import cache
 import traceback
 from requests.exceptions import RequestException
@@ -32,11 +33,13 @@ class AirTable():
             load_dotenv()
             
             # Get the API key from environment variables or the passed argument
-            self.api_key = ex_api_key or st.secrets.get("AIRTABLE_API_KEY")
+            self.api_key = ex_api_key or get_secret("AIRTABLE_API_KEY")
             if not self.api_key:
                 raise AirTableError("Airtable API key not found. Please check your .env file or streamlit secrets.")
                 
-            self.base_id = "appEe646yuQexwHJo"
+            self.base_id = get_secret("AIRTABLE_BASE_ID")
+            if not self.base_id:
+                raise AirTableError("Airtable base ID not found. Please check your .env file or streamlit secrets.")
             
             # Initialize tables for dish stickers
             self.dish_orders_table = Table(self.api_key, self.base_id, 'tblVwpvUmsTS2Se51')

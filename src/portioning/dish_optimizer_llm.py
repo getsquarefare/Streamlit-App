@@ -2,6 +2,7 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import streamlit as st
+from src.config import get_secret
 
 MAX_VEGGIES_GRAM = 300
 class LLMDishOptimizer:
@@ -140,8 +141,8 @@ class LLMDishOptimizer:
         # Generate the prompt using the generate_prompt function
         prompt = self.generate_prompt()
         
-        # Get API key from Streamlit secrets
-        api_key = st.secrets["OPENAI_API_KEY"]
+        # Get API key from .env or Streamlit secrets
+        api_key = get_secret("OPENAI_API_KEY")
         client = OpenAI(api_key=api_key)
         
         # Define the OpenAI API call with the generated prompt

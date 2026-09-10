@@ -19,7 +19,9 @@ pip install -r requirements.txt
 streamlit run streamlitController.py
 ```
 
-Requires Python 3.10 (`runtime.txt`). Secrets (Airtable token, OpenAI key, etc.) go in `.streamlit/secrets.toml` — not committed.
+Requires Python 3.10 (`runtime.txt`).
+
+Secrets go in a local `.env` (copy `.env.example`) or `.streamlit/secrets.toml` — neither is committed. `.env` / environment variables take precedence, so a `.env` also works when running a generator script directly (e.g. `python -m src.generators.one_pager_generator`). Keys: `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID` (required), `OPENAI_API_KEY`.
 
 Always launch from the repo root; generators load templates from `template/` via relative paths.
 
