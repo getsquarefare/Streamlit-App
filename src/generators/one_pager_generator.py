@@ -174,6 +174,12 @@ def process_data(db):
     df_clients['consolidated_nutrition'] = df_clients['group_key'].map(consolidated_nutrition_map)
     df_clients['NUTRITION'] = df_clients['consolidated_nutrition'].fillna('')
     
+    # Drop client-profile columns that collide with the order's own shipping
+    # fields (the Clients table has its own lookup fields with the same
+    # names). We want the order's shipping destination to win, unsuffixed.
+    colliding_client_cols = ['Shipping Address 1', 'Shipping Address 2', 'Shipping City', 'Shipping Province', 'Shipping Postal Code']
+    df_clients = df_clients.drop(columns=[c for c in colliding_client_cols if c in df_clients.columns])
+
     # IMPROVEMENT: First merge the dataframes, then calculate page indices
     df_merge = df_orders.merge(df_clients, on='CLIENT', how='left')
 
