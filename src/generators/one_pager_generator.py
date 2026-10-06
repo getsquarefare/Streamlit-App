@@ -155,7 +155,7 @@ def process_data(db):
     df_clients['group_key'] = df_clients['identifier'].apply(lambda x: "".join(x.split("|")[::2]) if isinstance(x, str) else x)
     
     # Sort and consolidate nutrition lines
-    meal_order = ['breakfast', 'lunch', 'dinner', 'snack']
+    meal_order = ['breakfast', 'lunch', 'dinner', 'additional meal', 'snack']
     
     def sort_nutrition_lines(lines):
         def meal_sort_key(line):
