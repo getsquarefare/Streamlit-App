@@ -161,13 +161,13 @@ def group_ingredients_by_component(db,client_servings):
         'Breakfast Meat': {},  # Separate section for breakfast meats
         'Meat': {},  # Lunch/dinner meats
         'Sauce': {},
-        'Garnish': {},  # Will store garnish combinations and their meal counts
+        'Garnish': {},  # Will store each garnish and the number of meals it appears in
         'Veggie': {},
         'Snack': {}  # New section for snacks
     }
 
-    # Special handling for garnish combinations
-    garnish_combinations = {}  # Will store unique combinations and their meal counts
+    # Special handling for garnish: count meals per individual garnish
+    garnish_counts = {}
 
     # Special handling for snacks
     snack_dishes = {}  # Will store snack dishes and their total grams
@@ -311,23 +311,14 @@ def group_ingredients_by_component(db,client_servings):
 
                 ingredient_summary[component_type][clean_ingredient_name]['total_grams'] += final_grams
 
-        # Handle garnish combinations
-        if garnish_names and any(name.strip() for name in garnish_names):
-            if dish_name not in garnish_combinations:
-                garnish_combinations[dish_name] = {
-                    'garnishes': set(),
-                    'meal_count': 0
-                }
-            garnish_combinations[dish_name]['garnishes'].update(name.strip() for name in garnish_names if name.strip())
-            garnish_combinations[dish_name]['meal_count'] += 1
+        # Count each garnish once per meal it appears in
+        for garnish in {name.strip() for name in garnish_names if name.strip()}:
+            garnish_counts[garnish] = garnish_counts.get(garnish, 0) + 1
 
-    # Add garnish combinations to the summary
+    # Add garnish counts to the summary
     ingredient_summary['Garnish'] = {
-        dish: {
-            'garnish_combo': ', '.join(sorted(garnish_data['garnishes'])),
-            'meal_count': garnish_data['meal_count']
-        }
-        for dish, garnish_data in garnish_combinations.items()
+        garnish: {'meal_count': count}
+        for garnish, count in garnish_counts.items()
     }
 
     # Add snack dishes to the summary
@@ -633,7 +624,7 @@ def create_to_make_sheet_excel(ingredient_summary):
             ingredients = ingredient_summary[component_type]
 
             # Column headers for this component
-            headers = ['Ingredient', 'Preparation', 'Uncooked (g)','uncooked (lbs)'] if component_type != 'Garnish' else ['Garnishes', '# of Meals']
+            headers = ['Ingredient', 'Preparation', 'Uncooked (g)','uncooked (lbs)'] if component_type != 'Garnish' else ['Garnish', '# of Meals']
             for col, header in enumerate(headers, 1):
                 cell = ws.cell(row=left_row, column=col)
                 if col == 1:  # First column (Ingredient)
@@ -647,14 +638,13 @@ def create_to_make_sheet_excel(ingredient_summary):
             left_row += 1
 
             if component_type == 'Garnish':
-                # Sort garnish combinations by meal count (descending)
+                # Sort garnishes by meal count (descending), then by name
                 sorted_items = sorted(ingredients.items(),
-                                    key=lambda x: (x[0].split()[-1], -x[1]['meal_count']),
-                                    reverse=True)
+                                    key=lambda x: (-x[1]['meal_count'], x[0]))
 
                 for item_name, data in sorted_items:
                     # Garnish row
-                    ws.cell(row=left_row, column=1, value=data['garnish_combo']).font = ingredient_font
+                    ws.cell(row=left_row, column=1, value=item_name).font = ingredient_font
                     ws.cell(row=left_row, column=2, value=data['meal_count']).font = ingredient_font
 
                     # Apply borders to all cells in the row
