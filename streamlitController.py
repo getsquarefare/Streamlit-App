@@ -47,14 +47,24 @@ def main():
     if refresh_landing_page_cache_button:
         try:
             with st.spinner('Refreshing caches...'):
-                # Call the refresh endpoint for both caches
-                response = requests.post(f"{LANDING_PAGE_API_URL}/api/refresh-cache", timeout=120)
-                if response.status_code == 200:
-                    st.success("Landing page cache refreshed successfully!")
-                    st.info("Please wait for a few minutes for the changes to take effect.")
-                    
-                else:
+                # The endpoint returns 202 right away and refreshes in the background
+                # (avoids nginx's 60s 504), so poll the status endpoint until it finishes.
+                response = requests.post(f"{LANDING_PAGE_API_URL}/api/refresh-cache", timeout=30)
+                if response.status_code not in (200, 202):
                     st.error(f"Cache refresh failed: {response.text}")
+                else:
+                    status = response.json()
+                    deadline = time.time() + 300
+                    while status.get('status') == 'running' and time.time() < deadline:
+                        time.sleep(3)
+                        status = requests.get(f"{LANDING_PAGE_API_URL}/api/refresh-cache/status", timeout=30).json()
+
+                    if status.get('status') == 'success':
+                        st.success("Landing page cache refreshed successfully!")
+                    elif status.get('status') == 'error':
+                        st.error(f"Cache refresh failed: {status.get('error')}")
+                    else:
+                        st.warning("Cache refresh is still running on the server. Check back in a few minutes.")
         except requests.exceptions.ConnectionError:
             st.error("Could not connect to the landing page server. Is it running?")
         except requests.exceptions.Timeout:
