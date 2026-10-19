@@ -131,12 +131,17 @@ def process_data(db):
 
     df_orders.ZONE_NUMBER = df_orders.ZONE_NUMBER.apply(lambda x: str(x[0] if isinstance(x, list) else str(x).strip()))
     
+    # A skipped meal's profile holds default targets: shown only when this sheet has an order linked to it, otherwise 0.
+    ordered_client_ids = set(df_orders['CLIENT'])
+
     # Process nutrition information
     for _, row in df_clients.iterrows():
         # Reset per row so a record with no goals doesn't inherit the previous row's line
         nutrition_line = ''
         if 'Customization Tags' in row and isinstance(row['Customization Tags'], list) and "No Nutrition Data in Sheet" in row['Customization Tags']:
             nutrition_line = ''
+        elif pd.notna(row.get('skipped')) and bool(row.get('skipped')) and row['CLIENT'] not in ordered_client_ids:
+            nutrition_line = row['identifier'].split('|')[1].strip() + ' Nutrition target per serving: 0 kcals | 0g carbs, 0g protein, 0g fat, 0g fiber'
         elif 'goal_calories' in row and not pd.isna(row['goal_calories']) and row['goal_calories'] > 0:
             nutrition_line = row['identifier'].split('|')[1].strip() + ' Nutrition target per serving: '
             nutrition_line += f"{int(row['goal_calories'])} kcals | "

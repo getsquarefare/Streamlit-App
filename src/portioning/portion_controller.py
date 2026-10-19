@@ -12,6 +12,21 @@ from src.data.database import db  # shared database instance
 from src.portioning.dish_optimizer_llm import LLMDishOptimizer
 from src.portioning.dish_optimizer_ifelse import NewDishOptimizer
 
+# Targets for a client profile with 0 calories (e.g. a skipped meal that got ordered anyway).
+# Same numbers as Landing_Page/backend/utils/defaultNutrition.js DEFAULT_MEAL_TARGETS -- keep in sync by hand.
+DEFAULT_MAIN_MEAL_TARGETS = {"goal_calories": 600, "goal_carbs(g)": 60, "goal_protein(g)": 45, "goal_fat(g)": 20, "goal_fiber(g)": 9}
+DEFAULT_SNACK_TARGETS = {"goal_calories": 150, "goal_carbs(g)": 15, "goal_protein(g)": 11, "goal_fat(g)": 5, "goal_fiber(g)": 2}
+
+
+def apply_default_targets_if_zero(client):
+    """Returns the client profile, with the default targets for its meal when goal_calories is 0 or empty."""
+    if client.get("goal_calories"):
+        return client
+    meal = client.get("Meal")
+    meal = str((meal[0] if meal else "") if isinstance(meal, list) else (meal or "")).strip().lower()
+    defaults = DEFAULT_SNACK_TARGETS if meal in ("snack", "snacks") else DEFAULT_MAIN_MEAL_TARGETS
+    return {**client, **defaults}
+
 
 if __name__ == "__main__":
     import os
@@ -524,7 +539,10 @@ class MealRecommendation:
             raise PortioningError(f"Skipping order {shopify_id}: No Final Ingredients with User Edits provided")
         
         client = self.db.get_client_details(recId=client_id)
-        
+        if not client:
+            raise PortioningError(f"Skipping order {shopify_id}: client profile {client_id} not found")
+        client = apply_default_targets_if_zero(client)
+
         # Check if any nutrition goals are zero
         zero_goals = []
         if "goal_calories" in client and client["goal_calories"] == 0:
