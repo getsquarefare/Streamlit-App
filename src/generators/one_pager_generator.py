@@ -282,9 +282,9 @@ def process_data(db):
         'Customization Tags': 'tags_list'
     }, inplace=True)
 
-    # Create a unique client identifier
-    df_grouped['CLIENT_UNIQUE_ID'] = df_grouped['First_Name'].fillna('') + ' ' + df_grouped['Last_Name'].fillna('')
-    df_grouped['CLIENT_UNIQUE_ID'] = df_grouped['CLIENT_UNIQUE_ID'].apply(lambda x: x.strip())
+    # Create a unique client identifier from the order's Customer Name (= eater name),
+    # so the one-sheeter matches the dish sticker
+    df_grouped['CLIENT_UNIQUE_ID'] = df_grouped['Customer Name'].fillna('').astype(str).str.strip()
     df_merge_grouped = df_grouped.sort_values(by=['CLIENT_UNIQUE_ID'])
     
     # Create a concatenated shipping address for household grouping
@@ -346,7 +346,7 @@ def process_data(db):
     )
     
     df_merge_grouped['line_preparedFor'] = df_merge_grouped.apply(
-        lambda row: "Prepared for: " + (row['First_Name'] or '') + " " + (row['Last_Name'] or ''), axis=1
+        lambda row: "Prepared for: " + row['CLIENT_UNIQUE_ID'], axis=1
     )
     # Add best before date (delivery date + 3 days)
     def add_days(date_str, days=3):
@@ -366,7 +366,7 @@ def process_data(db):
     df_merge_grouped['line_portion'] = df_merge_grouped.portion_list
     df_merge_grouped['line_nutrition'] = df_merge_grouped.NUTRITION
     df_merge_grouped['line_dishes'] = df_merge_grouped.dish_list
-    df_merge_grouped['is_shipping_contact'] = df_merge_grouped['Shipping Name'].str.lower() == (df_merge_grouped['First_Name'].str.lower() + ' ' + df_merge_grouped['Last_Name'].str.lower())
+    df_merge_grouped['is_shipping_contact'] = df_merge_grouped['Shipping Name'].fillna('').astype(str).str.strip().str.lower() == df_merge_grouped['CLIENT_UNIQUE_ID'].str.lower()
 
     # Calculate total items per household (excluding ice pack)
     def count_dishes_excluding_ice_pack(dish_list):
@@ -391,7 +391,7 @@ def process_data(db):
     
     
     # Sort by household group to ensure all members of the same household are together
-    df_merge_grouped = df_merge_grouped.sort_values(by=['HOUSEHOLD_GROUP', 'First_Name', 'Last_Name', 'page_number'])
+    df_merge_grouped = df_merge_grouped.sort_values(by=['HOUSEHOLD_GROUP', 'CLIENT_UNIQUE_ID', 'page_number'])
     
     # Debug log to show household groupings
     print(f"Total households: {len(df_merge_grouped['HOUSEHOLD_GROUP'].unique())}")
