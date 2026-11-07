@@ -333,17 +333,33 @@ def process_data(db):
         lambda x: "\n".join(household_members[x])
     )
     
-    # Generate household labels
-    df_merge_grouped['line_household_label'] = df_merge_grouped.apply(
-        lambda row: ("Household Members:" if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1 else ""),
-        axis=1
-    )
-    
-    # Generate final text fields
-    df_merge_grouped['line_household'] = df_merge_grouped.apply(
-        lambda row: (row['HOUSEHOLD_MEMBERS'] if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1 else ""),
-        axis=1
-    )
+    # "Ship to" is needed when the shipping name doesn't match any eater at this address,
+    # so packers can match the one-sheet to the bag sticker (which shows the Shipping Name)
+    def get_ship_to(row):
+        shipping_name = str(row['Shipping Name'] or '').strip() if pd.notna(row['Shipping Name']) else ''
+        members_lower = {m.lower() for m in household_members.get(row['HOUSEHOLD_GROUP'], [])}
+        return shipping_name if shipping_name and shipping_name.lower() not in members_lower else ''
+
+    df_merge_grouped['SHIP_TO'] = df_merge_grouped.apply(get_ship_to, axis=1)
+
+    # Generate household label / member list. These text boxes are reused for "Ship to":
+    # - multiple eaters: member list, plus "Ship to: X" underneath when needed
+    # - single eater: "Ship to:" + shipping name when needed, otherwise blank
+    def get_household_label(row):
+        if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1:
+            return "Household Members:"
+        return "Ship to:" if row['SHIP_TO'] else ""
+
+    def get_household_text(row):
+        if len((row['HOUSEHOLD_MEMBERS'] or '').split('\n')) > 1:
+            text = row['HOUSEHOLD_MEMBERS']
+            if row['SHIP_TO']:
+                text += "\n\nShip to: " + row['SHIP_TO']
+            return text
+        return row['SHIP_TO']
+
+    df_merge_grouped['line_household_label'] = df_merge_grouped.apply(get_household_label, axis=1)
+    df_merge_grouped['line_household'] = df_merge_grouped.apply(get_household_text, axis=1)
     
     df_merge_grouped['line_preparedFor'] = df_merge_grouped.apply(
         lambda row: "Prepared for: " + row['CLIENT_UNIQUE_ID'], axis=1
