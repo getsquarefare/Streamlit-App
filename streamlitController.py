@@ -25,6 +25,23 @@ from src.generators.to_make_sheet_generator import *
 from src.utils.cancellable import CancellableTask
 from src.generators.kitchen_screen_pivot_generator import generate_kitchen_pivot
 
+def get_setting(*names):
+    """Return the first of `names` found in st.secrets, then environment variables."""
+    for name in names:
+        try:
+            if name in st.secrets:
+                return st.secrets[name]
+        except Exception:
+            pass  # no secrets.toml at all
+        if os.environ.get(name):
+            return os.environ[name]
+    return None
+
+
+# Landing page / ecommerce Express backend, e.g. https://orders.getsquarefare.com (no /api).
+LANDING_PAGE_API_URL = (get_setting("LANDING_PAGE_API_URL") or "http://localhost:3001").rstrip("/")
+
+
 # Streamlit app
 def main():
     db = new_database_access()
@@ -40,8 +57,7 @@ def main():
     st.header('Refresh Landing Page Cache 🔄')
     st.markdown("⚠️ If you have made any changes to the Ingredients, Dishes, or Variants, you need to refresh the cache to see the changes.")
 
-    # API base URL for the landing page backend
-    LANDING_PAGE_API_URL = "https://orders.getsquarefare.com"
+    st.caption(f"Backend: `{LANDING_PAGE_API_URL}`")
 
     refresh_landing_page_cache_button = st.button("Refresh Landing Page Cache")
     if refresh_landing_page_cache_button:
@@ -49,7 +65,7 @@ def main():
             with st.spinner('Refreshing caches...'):
                 # The endpoint returns 202 right away and refreshes in the background
                 # (avoids nginx's 60s 504), so poll the status endpoint until it finishes.
-                headers = {"x-internal-key": st.secrets["LANDING_PAGE_INTERNAL_KEY"]}
+                headers = {"x-internal-key": get_setting("LANDING_PAGE_INTERNAL_KEY") or ""}
                 response = requests.post(f"{LANDING_PAGE_API_URL}/api/refresh-cache", headers=headers, timeout=30)
                 if response.status_code not in (200, 202):
                     st.error(f"Cache refresh failed: {response.text}")
@@ -771,6 +787,137 @@ def main():
             task.start()
             st.session_state.kitchen_pivot_task = task
             st.rerun()
+
+    # Subscription billing run (Express backend)
+    st.divider()
+    st.header(':red[Subscription Billing] 💳')
+    with st.expander('Expand to see more details'):
+        st.markdown(
+            "**Preview** is a dry run: it writes nothing and never touches Stripe.\n\n"
+            "⚠️ **Charge** creates Billing Adjustments in Airtable and :red[charges customers' saved cards]."
+        )
+
+        # Each cutoff is (weekday, hour, minute) in ET; weekday follows Python (Mon=0).
+        cutoffs = {
+            "Friday 8:00pm ET": (4, 20, 0),
+            "Saturday 12:00pm ET": (5, 12, 0),
+            "Tuesday 12:00pm ET": (1, 12, 0),
+        }
+        cutoff_choice = st.radio(
+            "Run as of", list(cutoffs.keys()), horizontal=True, key="billing_cutoff"
+        )
+
+        weekday, hour, minute = cutoffs[cutoff_choice]
+        today_et = datetime.now(est).date()
+        # Default to the next occurrence of that weekday (today counts).
+        default_date = today_et + timedelta(days=(weekday - today_et.weekday()) % 7)
+        cutoff_date = st.date_input(
+            f"Date for {cutoff_choice}", value=default_date, key=f"billing_date_{weekday}"
+        )
+        if cutoff_date.weekday() != weekday:
+            st.warning(f"{cutoff_date:%Y-%m-%d} is a {cutoff_date:%A}, not the weekday in the label.")
+        cutoff_dt = est.localize(datetime(cutoff_date.year, cutoff_date.month, cutoff_date.day, hour, minute))
+        billing_now = cutoff_dt.isoformat()
+        st.caption(f"Sending `now` = `{billing_now}`")
+
+        billing_base_url = "https://test.getsquarefare.com/api"
+        billing_key = get_setting("LANDING_PAGE_INTERNAL_KEY")  # backend checks this against its INTERNAL_API_KEY
+        st.caption(f"Backend: `{billing_base_url}`")
+
+        def call_billing_endpoint(path):
+            """POST to the billing backend. Returns the parsed JSON on success, else shows an error and returns None."""
+            if not billing_key:
+                st.error("No API key found. Set LANDING_PAGE_INTERNAL_KEY in st.secrets or the environment.")
+                return None
+            url = f"{billing_base_url.rstrip('/')}{path}"
+            headers = {"X-Internal-Key": billing_key}
+            try:
+                response = requests.post(url, headers=headers, json={"now": billing_now}, timeout=180)
+            except requests.exceptions.ConnectionError:
+                st.error("Could not connect to the billing server. Is it running?")
+                return None
+            except requests.exceptions.Timeout:
+                st.error("Request timed out after 180s.")
+                return None
+            try:
+                data = response.json()
+            except ValueError:
+                st.error(f"HTTP {response.status_code}: non-JSON response")
+                st.code(response.text)
+                return None
+            if not response.ok or not data.get("success"):
+                st.error(f"HTTP {response.status_code}: {data.get('error', 'Request failed')}")
+                if data.get("details"):
+                    st.code(data["details"])
+                return None
+            return data
+
+        col_preview, col_charge = st.columns(2)
+        with col_preview:
+            if st.button("Preview Charges", key="billing_preview"):
+                with st.spinner("Calculating billing run (can take 10-30s)..."):
+                    data = call_billing_endpoint("/subscriptions/calculate-billing-run")
+                st.session_state.billing_result = ("preview", billing_now, data) if data else None
+        with col_charge:
+            confirm_charge = st.checkbox("I understand this charges real cards", key="billing_confirm")
+            if st.button("Charge Customers", key="billing_charge", type="primary", disabled=not confirm_charge):
+                with st.spinner("Charging customers (can take 10-30s)..."):
+                    data = call_billing_endpoint("/subscriptions/charge-billing-run")
+                st.session_state.billing_result = ("charge", billing_now, data) if data else None
+
+        # Render the last result full width, below the buttons, so it survives reruns.
+        billing_result = st.session_state.get("billing_result")
+        if billing_result:
+            kind, result_now, data = billing_result
+            if kind == "preview":
+                rows = data.get("rows", [])
+                total = sum(r.get("amount", 0) for r in rows)
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Eligible subscribers", data.get("eligibleSubscribers", 0))
+                m2.metric("Rows to bill", len(rows))
+                m3.metric("Total amount", f"${total:,.2f}")
+                st.caption(f"Preview as of `{result_now}`")
+
+                if not rows:
+                    st.info(f"Nothing to bill for the dates locked as of {result_now}")
+                else:
+                    df = pd.DataFrame([
+                        {
+                            "Customer": (r.get("customerName") or "").strip(),
+                            "Unique ID": r.get("uniqueId"),
+                            "Deadline": r.get("deadline"),
+                            "Amount": r.get("amount", 0),
+                            "Summary": r.get("summary", ""),
+                        }
+                        for r in rows
+                    ])
+                    styled = (
+                        df.style
+                        .format({"Amount": lambda v: f"-${abs(v):,.2f}" if v < 0 else f"${v:,.2f}"})
+                        .apply(lambda col: ["color: red; font-weight: bold" if v < 0 else "" for v in col], subset=["Amount"])
+                    )
+                    st.dataframe(styled, hide_index=True, width="stretch")
+
+                    negatives = [r for r in rows if r.get("amount", 0) < 0]
+                    if negatives:
+                        st.warning(
+                            f"{len(negatives)} row(s) have a negative amount (an earlier payment covered more than owed). "
+                            "These are logged as \"No charge due\" and won't be charged."
+                        )
+
+                    st.markdown("**Summaries**")
+                    for r in rows:
+                        name = (r.get("customerName") or "").strip() or r.get("uniqueId")
+                        amount = r.get("amount", 0)
+                        label = f"{name} · {r.get('deadline')} · {'-' if amount < 0 else ''}\\${abs(amount):,.2f}"
+                        with st.expander(label):
+                            # Summary items are separated by "; " — show one per line.
+                            items = [i.strip() for i in (r.get("summary") or "").split(";") if i.strip()]
+                            # Escape "$" so Streamlit markdown doesn't render it as LaTeX.
+                            st.markdown("\n".join(f"- {i.replace('$', chr(92) + '$')}" for i in items))
+            else:
+                st.caption(f"Charge run as of `{result_now}`")
+                st.json(data)
 
 if __name__ == "__main__":
     main()
