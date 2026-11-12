@@ -82,13 +82,13 @@ def process_data(db):
     df_orders = df_orders.reindex(columns=required_cols, fill_value="")
 
     # Eater Name (lookup from the matched profile) identifies who the sheet is prepared for;
-    # fall back to the order's Customer Name when the lookup is blank
+    # fall back to the order's Customer Name when the lookup is blank or a placeholder "standard" profile name
     def _eater_name(row):
         eater = row['Eater Name']
         if isinstance(eater, list):
             eater = eater[0] if eater else ''
         eater = str(eater).strip() if eater is not None and not pd.isna(eater) else ''
-        if eater:
+        if eater and 'standard' not in eater.lower():
             return eater
         customer = row['Customer Name']
         return '' if customer is None or (not isinstance(customer, str) and pd.isna(customer)) else str(customer).strip()

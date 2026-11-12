@@ -368,12 +368,13 @@ def read_client_serving(db):
         df_flat["#"] = df_flat["#"].apply(lambda x: str(int(x)))
 
         # all linked item needs to be extracted from a list
-        # Name on the sticker = Eater Name (from the matched profile); fall back to the order's Customer Name if blank
+        # Name on the sticker = Eater Name (from the matched profile); fall back to the order's
+        # Customer Name if blank or a placeholder "standard" profile name
         def _first(x):
             return x[0] if isinstance(x, list) and x else x
         def _sticker_name(row):
             eater = _first(row['Eater Name'])
-            if isinstance(eater, str) and eater.strip() and eater != 'N/A':
+            if isinstance(eater, str) and eater.strip() and eater != 'N/A' and 'standard' not in eater.lower():
                 return eater.strip()
             return _first(row['Customer Name'])
         df_flat['client_name'] = df_flat.apply(_sticker_name, axis=1)
