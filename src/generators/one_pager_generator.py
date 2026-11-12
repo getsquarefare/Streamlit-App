@@ -33,6 +33,7 @@ def get_open_orders(db):
         'ZONE_NUMBER': 'fldbL18Ixas6ong0j',
         'SHIPPING_NAME': 'fldIEhlbz7JzbpTOK',
         'MEAL_TYPE_FROM_PROFILE': 'fldGqQtz9zyJmMDq9',
+        'EATER_NAME': 'fldy4G8nPLLjlcHyp',
     }
     data = db.get_all_open_orders(view='viwuVy9aN2LLZrcPF')
     # Create DataFrame and map column names
@@ -74,10 +75,24 @@ def process_data(db):
         'Delivery Date', 'Meal Sticker', 'Meal Portion', 'To_Match_Client_Nutrition',
         'Shipping Address 1', 'Shipping Address 2', 'Shipping City', 
         'Shipping Province', 'Shipping Postal Code', 'Customer Name','# of Parts','Zone Number (from Delivery Zone)','Shipping Name','Meal Type from Profile',
+        'Eater Name',
     ]
 
     # Ensure all required columns exist (missing ones will be created and filled with "")
     df_orders = df_orders.reindex(columns=required_cols, fill_value="")
+
+    # Eater Name (lookup from the matched profile) identifies who the sheet is prepared for;
+    # fall back to the order's Customer Name when the lookup is blank
+    def _eater_name(row):
+        eater = row['Eater Name']
+        if isinstance(eater, list):
+            eater = eater[0] if eater else ''
+        eater = str(eater).strip() if eater is not None and not pd.isna(eater) else ''
+        if eater:
+            return eater
+        customer = row['Customer Name']
+        return '' if customer is None or (not isinstance(customer, str) and pd.isna(customer)) else str(customer).strip()
+    df_orders['Eater Name'] = df_orders.apply(_eater_name, axis=1)
 
     # Drop rows where 'To_Match_Client_Nutrition' is missing/blank
     df_orders = df_orders[df_orders['To_Match_Client_Nutrition'] != ""]
@@ -214,7 +229,7 @@ def process_data(db):
 
     # Calculate page indices AFTER expansion (so expanded rows count toward page size)
     page_size = 6
-    df_merge['Index'] = df_merge.groupby(['Customer Name','Shipping Address 1']).cumcount()
+    df_merge['Index'] = df_merge.groupby(['Eater Name','Shipping Address 1']).cumcount()
     df_merge['page_number'] = df_merge['Index'] // page_size
 
     # Function to calculate total characters in meal stickers for a group
@@ -222,7 +237,7 @@ def process_data(db):
         return group['Meal Sticker'].str.len().sum()
 
     # Split pages with long meal sticker names
-    df_merge['temp_group'] = df_merge.groupby(['Customer Name', 'Shipping Address 1', 'page_number']).ngroup()
+    df_merge['temp_group'] = df_merge.groupby(['Eater Name', 'Shipping Address 1', 'page_number']).ngroup()
     page_splits = []
 
     for group_id in df_merge['temp_group'].unique():
@@ -255,7 +270,7 @@ def process_data(db):
     df_merge = df_merge.drop('temp_group', axis=1)
 
     # Simple groupby to create page-level information
-    df_grouped = df_merge.groupby(['Customer Name', 'page_number']).agg({
+    df_grouped = df_merge.groupby(['Eater Name', 'page_number']).agg({
         # Keep the first occurrence of these customer details per page
         'First_Name': 'first',
         'Last_Name': 'first',
@@ -282,9 +297,9 @@ def process_data(db):
         'Customization Tags': 'tags_list'
     }, inplace=True)
 
-    # Create a unique client identifier from the order's Customer Name (= eater name),
-    # so the one-sheeter matches the dish sticker
-    df_grouped['CLIENT_UNIQUE_ID'] = df_grouped['Customer Name'].fillna('').astype(str).str.strip()
+    # Unique client identifier = Eater Name (from the matched profile),
+    # so the one-sheeter "Prepared for" matches the dish sticker
+    df_grouped['CLIENT_UNIQUE_ID'] = df_grouped['Eater Name'].fillna('').astype(str).str.strip()
     df_merge_grouped = df_grouped.sort_values(by=['CLIENT_UNIQUE_ID'])
     
     # Create a concatenated shipping address for household grouping

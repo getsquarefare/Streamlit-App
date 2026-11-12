@@ -325,7 +325,7 @@ def generate_dish_stickers_barcode(db, progress_placeholder=None, cancel_event=N
     return prs
 
 def read_client_serving(db):
-    fields_to_return = ['#', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts','MealType from Profile (from Linked OrderItem)']
+    fields_to_return = ['#', 'Eater Name', 'Customer Name', 'Meal Sticker (from Linked OrderItem)', 'Meal Portion (from Linked OrderItem)', 'Delivery Date', 'Position Id', 'Dish ID (from Linked OrderItem)','Delivery Zone (from Linked OrderItem)','# of Parts','MealType from Profile (from Linked OrderItem)']
     try:
         # Initialize table
         records = db.get_clientservings_data(view=VIEW_ID)
@@ -368,7 +368,15 @@ def read_client_serving(db):
         df_flat["#"] = df_flat["#"].apply(lambda x: str(int(x)))
 
         # all linked item needs to be extracted from a list
-        df_flat['client_name'] = df_flat['Customer Name'].apply(lambda x: x[0] if isinstance(x, list) else x)
+        # Name on the sticker = Eater Name (from the matched profile); fall back to the order's Customer Name if blank
+        def _first(x):
+            return x[0] if isinstance(x, list) and x else x
+        def _sticker_name(row):
+            eater = _first(row['Eater Name'])
+            if isinstance(eater, str) and eater.strip() and eater != 'N/A':
+                return eater.strip()
+            return _first(row['Customer Name'])
+        df_flat['client_name'] = df_flat.apply(_sticker_name, axis=1)
 
         # zone
         df_flat['zone'] = df_flat['Delivery Zone (from Linked OrderItem)'].apply(lambda x: 'Zone ' + str(x[0]) if isinstance(x, list) else 'Zone ' + str(x))
