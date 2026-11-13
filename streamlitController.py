@@ -799,9 +799,9 @@ def main():
 
         # Each cutoff is (weekday, hour, minute) in ET; weekday follows Python (Mon=0).
         cutoffs = {
-            "Friday 8:00pm ET": (4, 20, 0),
-            "Saturday 12:00pm ET": (5, 12, 0),
-            "Tuesday 12:00pm ET": (1, 12, 0),
+            "Friday 8:30pm ET": (4, 20, 30),
+            "Saturday 12:30pm ET": (5, 12, 30),
+            "Tuesday 12:30pm ET": (1, 12, 30),
         }
         cutoff_choice = st.radio(
             "Run as of", list(cutoffs.keys()), horizontal=True, key="billing_cutoff"
