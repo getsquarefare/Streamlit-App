@@ -820,14 +820,16 @@ def main():
         billing_now = cutoff_dt.isoformat()
         st.caption(f"Sending `now` = `{billing_now}`")
 
-        billing_base_url = "https://test.getsquarefare.com/api"
-        billing_key = get_setting("LANDING_PAGE_INTERNAL_KEY")  # backend checks this against its INTERNAL_API_KEY
+        # Billing runs against its own backend (test env), separate from the cache refresh (prod).
+        # BILLING_API_URL has no /api, e.g. https://test.getsquarefare.com
+        billing_base_url = f"{(get_setting('BILLING_API_URL') or 'http://localhost:3001').strip().rstrip('/')}/api"
+        billing_key = get_setting("BILLING_INTERNAL_KEY")  # that server's INTERNAL_API_KEY
         st.caption(f"Backend: `{billing_base_url}`")
 
         def call_billing_endpoint(path):
             """POST to the billing backend. Returns the parsed JSON on success, else shows an error and returns None."""
             if not billing_key:
-                st.error("No API key found. Set LANDING_PAGE_INTERNAL_KEY in st.secrets or the environment.")
+                st.error("No API key found. Set BILLING_INTERNAL_KEY in st.secrets or the environment.")
                 return None
             url = f"{billing_base_url.rstrip('/')}{path}"
             headers = {"X-Internal-Key": billing_key}
