@@ -798,6 +798,7 @@ def main():
         )
 
         # Each cutoff is (weekday, hour, minute) in ET; weekday follows Python (Mon=0).
+        # Run 30 min after each deadline: the backend gives 20 min of leniency past the cutoff.
         cutoffs = {
             "Friday 8:30pm ET": (4, 20, 30),
             "Saturday 12:30pm ET": (5, 12, 30),
@@ -822,19 +823,25 @@ def main():
 
         # Billing runs against its own backend (test env), separate from the cache refresh (prod).
         # BILLING_API_URL has no /api, e.g. https://test.getsquarefare.com
-        billing_base_url = f"{(get_setting('BILLING_API_URL') or 'http://localhost:3001').strip().rstrip('/')}/api"
+        billing_root = (get_setting('BILLING_API_URL') or 'http://localhost:3001').strip().rstrip('/')
+        if billing_root.endswith('/api'):
+            billing_root = billing_root[:-len('/api')]  # tolerate a URL given with /api; avoid /api/api
+        billing_base_url = f"{billing_root}/api"
         billing_key = get_setting("BILLING_INTERNAL_KEY")  # that server's INTERNAL_API_KEY
         st.caption(f"Backend: `{billing_base_url}`")
 
-        def call_billing_endpoint(path):
-            """POST to the billing backend. Returns the parsed JSON on success, else shows an error and returns None."""
+        def call_billing_endpoint(path, method="POST"):
+            """Call the billing backend. Returns the parsed JSON on success, else shows an error and returns None."""
             if not billing_key:
                 st.error("No API key found. Set BILLING_INTERNAL_KEY in st.secrets or the environment.")
                 return None
             url = f"{billing_base_url.rstrip('/')}{path}"
             headers = {"X-Internal-Key": billing_key}
             try:
-                response = requests.post(url, headers=headers, json={"now": billing_now}, timeout=180)
+                if method == "GET":
+                    response = requests.get(url, headers=headers, timeout=30)
+                else:
+                    response = requests.post(url, headers=headers, json={"now": billing_now}, timeout=180)
             except requests.exceptions.ConnectionError:
                 st.error("Could not connect to the billing server. Is it running?")
                 return None
@@ -847,12 +854,28 @@ def main():
                 st.error(f"HTTP {response.status_code}: non-JSON response")
                 st.code(response.text)
                 return None
-            if not response.ok or not data.get("success"):
+            # The status endpoint has no "success" field; only POSTs report it.
+            if not response.ok or (method != "GET" and not data.get("success")):
                 st.error(f"HTTP {response.status_code}: {data.get('error', 'Request failed')}")
                 if data.get("details"):
                     st.code(data["details"])
                 return None
             return data
+
+        def format_deadline(iso):
+            if not iso:
+                return "none"
+            return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(est).strftime("%a %b %-d, %-I:%M %p ET")
+
+        def wait_for_charge_run(max_wait_s=900, poll_s=3):
+            """The charge endpoint answers 202 at once; poll its status until the run finishes."""
+            started = time.monotonic()
+            while time.monotonic() - started < max_wait_s:
+                status = call_billing_endpoint("/subscriptions/charge-billing-run/status", method="GET")
+                if status is None or status.get("status") != "running":
+                    return status
+                time.sleep(poll_s)
+            return {"status": "running", "startedAt": status.get("startedAt")}
 
         col_preview, col_charge = st.columns(2)
         with col_preview:
@@ -863,9 +886,15 @@ def main():
         with col_charge:
             confirm_charge = st.checkbox("I understand this charges real cards", key="billing_confirm")
             if st.button("Charge Customers", key="billing_charge", type="primary", disabled=not confirm_charge):
-                with st.spinner("Charging customers (can take 10-30s)..."):
-                    data = call_billing_endpoint("/subscriptions/charge-billing-run")
-                st.session_state.billing_result = ("charge", billing_now, data) if data else None
+                started = call_billing_endpoint("/subscriptions/charge-billing-run")
+                if started:
+                    with st.spinner("Charging customers (about 1 min per 50 customers)..."):
+                        data = wait_for_charge_run()
+                    st.session_state.billing_result = ("charge", billing_now, data) if data else None
+            # A run outlives a page reload, so its result can be fetched again at any time.
+            if st.button("Check Last Charge Run", key="billing_status"):
+                data = call_billing_endpoint("/subscriptions/charge-billing-run/status", method="GET")
+                st.session_state.billing_result = ("charge", None, data) if data else None
 
         # Render the last result full width, below the buttons, so it survives reruns.
         billing_result = st.session_state.get("billing_result")
@@ -878,17 +907,20 @@ def main():
                 m1.metric("Eligible subscribers", data.get("eligibleSubscribers", 0))
                 m2.metric("Rows to bill", len(rows))
                 m3.metric("Total amount", f"${total:,.2f}")
-                st.caption(f"Preview as of `{result_now}`")
+                st.caption(f"Preview as of `{result_now}` · billing deadline **{format_deadline(data.get('deadline'))}**")
 
                 if not rows:
-                    st.info(f"Nothing to bill for the dates locked as of {result_now}")
+                    st.info(f"Nothing to bill for the deadline {format_deadline(data.get('deadline'))}")
                 else:
                     df = pd.DataFrame([
                         {
                             "Customer": (r.get("customerName") or "").strip(),
                             "Unique ID": r.get("uniqueId"),
-                            "Deadline": r.get("deadline"),
+                            "First Delivery": r.get("deadline"),
                             "Amount": r.get("amount", 0),
+                            "Review Needed": bool(r.get("reviewNeeded")),
+                            "Stripe Customer": r.get("stripeCustomerId") or "",
+                            "Payment Method": r.get("paymentMethodId") or "",
                             "Summary": r.get("summary", ""),
                         }
                         for r in rows
@@ -906,6 +938,15 @@ def main():
                             f"{len(negatives)} row(s) have a negative amount (an earlier payment covered more than owed). "
                             "These are logged as \"No charge due\" and won't be charged."
                         )
+                    no_card = [r for r in rows if not r.get("paymentMethodId") and not r.get("reviewNeeded") and r.get("amount", 0) > 0]
+                    if no_card:
+                        st.warning(
+                            f"{len(no_card)} row(s) have no saved card and will be logged as \"No Saved Card\": "
+                            + ", ".join((r.get("customerName") or r.get("uniqueId") or "").strip() for r in no_card)
+                        )
+                    review = [r for r in rows if r.get("reviewNeeded")]
+                    if review:
+                        st.warning(f"{len(review)} row(s) need review (no active plan) and won't be charged.")
 
                     st.markdown("**Summaries**")
                     for r in rows:
@@ -918,8 +959,28 @@ def main():
                             # Escape "$" so Streamlit markdown doesn't render it as LaTeX.
                             st.markdown("\n".join(f"- {i.replace('$', chr(92) + '$')}" for i in items))
             else:
-                st.caption(f"Charge run as of `{result_now}`")
-                st.json(data)
+                status = data.get("status")
+                result = data.get("result") or {}
+                if result_now:
+                    st.caption(f"Charge run as of `{result_now}`")
+                if status == "running":
+                    st.info(f"Still running (started {data.get('startedAt')}). Click **Check Last Charge Run** in a minute.")
+                elif status == "error":
+                    st.error(f"Charge run failed: {data.get('error')}")
+                elif status == "idle":
+                    st.info("No charge run since the server last started.")
+                else:
+                    st.caption(f"Billing deadline **{format_deadline(result.get('deadline'))}** · finished {data.get('finishedAt')}")
+                    c1, c2, c3, c4, c5 = st.columns(5)
+                    c1.metric("Charged", result.get("charged", 0))
+                    c2.metric("Failed", result.get("failed", 0))
+                    c3.metric("No saved card", result.get("noCard", 0))
+                    c4.metric("Already paid", result.get("alreadyPaid", 0))
+                    c5.metric("Review needed", result.get("reviewNeeded", 0))
+                    if result.get("failed") or result.get("noCard"):
+                        st.warning("Fix the cards in Billing Adjustments / Stripe, then charge the same deadline again: only rows not yet Done are retried.")
+                with st.expander("Raw response"):
+                    st.json(data)
 
 if __name__ == "__main__":
     main()
