@@ -393,7 +393,21 @@ class AirTable():
         return open_orders[0]['id']
 
     def output_clientservings(self, portion_recommendations):
-        
+        self.clientserving_table.create(self._prepare_clientservings_row(portion_recommendations))
+
+    def update_clientservings(self, record_id, portion_recommendations, expected_linked_order_id):
+        """Overwrite the portioning result on an existing ClientServings record (record id and '#'
+        stay the same, so printed dish stickers and bag links stay valid) and clear the
+        'Final Ingredients Changed After Portioning' checkbox."""
+        prepared_row = self._prepare_clientservings_row(portion_recommendations)
+        linked = prepared_row.pop('Linked OrderItem')
+        if linked != [expected_linked_order_id]:
+            raise AirTableError(f"Linked order mismatch for {record_id}: portioning resolved {linked}, "
+                                f"record links {expected_linked_order_id}")
+        prepared_row['Final Ingredients Changed After Portioning'] = False
+        self.clientserving_table.update(record_id, prepared_row)
+
+    def _prepare_clientservings_row(self, portion_recommendations):
         # Flatten and prepare the data for Airtable
         prepared_row = {}
         prepared_row['Linked OrderItem'] = [
@@ -429,11 +443,7 @@ class AirTable():
         prepared_row['Fat %'] = nutrition_info['Fat %']/100
         prepared_row['Fiber %'] = nutrition_info['Fiber %']/100
         prepared_row['Carbs %'] = nutrition_info['Carbs %']/100
-
-        # Create the record in Airtable
-        self.clientserving_table.create(prepared_row)
-
-        return
+        return prepared_row
 
     def get_subscription_details_by_client_identifier(self, client_identifier):
         CLIENT_IDENTIFIER_FIELD = 'fld0igiHWQd8Sgh7S'

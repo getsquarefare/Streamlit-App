@@ -531,9 +531,19 @@ class MealRecommendation:
         return client_dish_pairs
         
 
-    def process_recommendation(self, shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning,protein_type_mapping):
-        # Extracted recommendation logic for concurrent execution in generate_recommendations
-        
+    def _write_clientservings(self, summary, existing_clientserving):
+        """Create a new ClientServings row, or overwrite `existing_clientserving` = (record_id, linked_order_id)."""
+        if existing_clientserving is None:
+            self.db.output_clientservings(summary)
+        else:
+            record_id, linked_order_id = existing_clientserving
+            self.db.update_clientservings(record_id, summary, linked_order_id)
+
+    def process_recommendation(self, shopify_id, client_id, dish_id, final_ingredients, deletions,skip_portioning,protein_type_mapping,
+                               existing_clientserving=None):
+        # Extracted recommendation logic for concurrent execution in generate_recommendations.
+        # existing_clientserving: optional (record_id, linked_order_id) to update in place instead of creating a row.
+
         # Check if final_ingredients is None or empty
         if final_ingredients is None or len(final_ingredients) == 0:
             raise PortioningError(f"Skipping order {shopify_id}: No Final Ingredients with User Edits provided")
@@ -614,6 +624,8 @@ class MealRecommendation:
         
         # print(f"Final dish for {shopify_id}\n {final_dish}")
         if not final_dish:
+            if existing_clientserving is not None:
+                raise PortioningError(f"Order {shopify_id}: no final ingredients match dish {dish_id}; nothing to portion")
             return
         dish_name = final_dish[0]["Airtable Dish Name"]
         recommendation_id = final_dish[0]["Recommendation ID"]
@@ -657,8 +669,8 @@ class MealRecommendation:
                 review_needed=False
             )
             # Calculate percentages for default recommendation
-            
-            self.db.output_clientservings(default_recommendation_summary)
+
+            self._write_clientservings(default_recommendation_summary, existing_clientserving)
             return
         # try:
         # Run optimization and process response
@@ -685,7 +697,7 @@ class MealRecommendation:
             explanation=notes + "; " + explanation,
             review_needed=review_needed
         )
-        self.db.output_clientservings(recommendation_summary)
+        self._write_clientservings(recommendation_summary, existing_clientserving)
         
         """ except Exception as e:
             # Fallback to default recommendation summary in case of failure
@@ -701,6 +713,62 @@ class MealRecommendation:
                 explanation = 'Error in optimization',
             )
             self.db.output_clientservings(default_recommendation_summary) """
+
+    def rerun_portioning_in_place(self, view_id, cancel_event=None, progress=None):
+        """
+        Re-run portioning for every ClientServings row in `view_id` (a ClientServings view) from its
+        linked Open Order's current data, and overwrite the result on that same ClientServings
+        record. The record id and '#' never change, so printed dish stickers still scan. Clears the
+        'Final Ingredients Changed After Portioning' checkbox on each updated row.
+
+        Returns (updated, failedCases) where updated is a list of dicts: #, field, old, new.
+        """
+        compare = ["Meat (g)", "Starch (g)", "Veggies (g)", "Sauce (g)", "Garnish (g)", "Calories (kcal)"]
+        order_fields = ["#", "To_Match_Client_Nutrition", "Dish ID", "Final Ingredients with User Edits",
+                        "Deletions", "Skip Portioning"]
+        updated, failedCases = [], []
+
+        if progress is not None:
+            progress.update(status="Loading ClientServings view…", done=0, failed=0, total=0)
+        rows = self.db.clientserving_table.all(view=view_id, fields=["#", "Linked OrderItem"] + compare)
+        protein_type_mapping = self.db.get_protein_group_mapping()
+        if progress is not None:
+            progress.update(total=len(rows), status="Re-portioning…")
+
+        def rerun_one(row):
+            rec_id, fields = row["id"], row["fields"]
+            linked = fields.get("Linked OrderItem") or []
+            if len(linked) != 1:
+                raise PortioningError(f"expected exactly 1 Linked OrderItem, found {len(linked)}")
+            order = self.db.open_orders_table.get(linked[0])
+            order = {"id": order["id"], "fields": {k: v for k, v in order["fields"].items() if k in order_fields}}
+            (shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning), = self.build_client_dish_mapping(
+                [order], shopify_id_column="#", client_column="To_Match_Client_Nutrition", dish_column="Dish ID",
+                ingredient_column="Final Ingredients with User Edits", deletion_column="Deletions",
+                skip_portioning_column="Skip Portioning")
+            self.process_recommendation(shopify_id, client_id, dish_id, final_ingredients, deletions, skip_portioning,
+                                        protein_type_mapping, existing_clientserving=(rec_id, linked[0]))
+            new_fields = self.db.clientserving_table.get(rec_id)["fields"]
+            return [{"#": fields.get("#"), "field": k, "old": fields.get(k), "new": new_fields.get(k)} for k in compare]
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_row = {executor.submit(rerun_one, row): row for row in rows}
+            for future in as_completed(future_to_row):
+                if cancel_event is not None and cancel_event.is_set():
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    failedCases.append("Cancelled by user — rows not yet processed were left untouched")
+                    break
+                num = future_to_row[future]["fields"].get("#")
+                try:
+                    updated.extend(future.result())
+                    if progress is not None:
+                        progress["done"] += 1
+                        progress["status"] = f"ClientServings #{num} updated"
+                except Exception as e:
+                    failedCases.append(f"ClientServings #{num} left untouched: {e}")
+                    if progress is not None:
+                        progress["failed"] += 1
+        return updated, failedCases
 
     def build_client_dish_mapping(
         self,

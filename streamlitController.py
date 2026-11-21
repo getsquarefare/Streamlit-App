@@ -1,5 +1,6 @@
 # Standard library imports
 import os
+import re
 import time
 import traceback
 from datetime import datetime, timedelta
@@ -157,6 +158,57 @@ def main():
                 task = CancellableTask(meal_recommendation.generate_recommendations_with_thread, progress=progress)
                 task.start()
                 st.session_state.portion_task = task
+                st.rerun()
+
+    # re-run portioning on existing ClientServings rows, updating them in place
+    st.subheader('Rerun portioning (update in place) :material/autorenew:')
+    with st.expander('Expand to see more details'):
+        st.markdown("Reruns portioning for every row in inputted :red[ClientServings] view, using each linked Open Order's "
+                    "final ingredients, and :red[overwrites the numbers on that same ClientServings record]. "
+                    "The ClientServings `#` stays the same, so dish stickers that are already printed still scan.")
+        st.markdown("⚠️ **Refresh cache** on the plating site so scans show the new grams.")
+
+        rerun_task = st.session_state.get("rerun_task")
+        if rerun_task is not None and not rerun_task.is_done():
+            progress = st.session_state.get("rerun_progress", {})
+            elapsed_str = str(timedelta(seconds=int(rerun_task.elapsed())))
+            if rerun_task.is_cancelled():
+                st.button("Cancelling…", disabled=True, key="rerun_cancel_disabled")
+            elif st.button("Cancel rerun", key="rerun_cancel"):
+                rerun_task.cancel()
+                st.rerun()
+            st.info(f"Re-portioning… 🕐 {elapsed_str} | {progress.get('done', 0)}/{progress.get('total', 0)} updated"
+                    f"{' (' + str(progress['failed']) + ' failed)' if progress.get('failed') else ''} — {progress.get('status', '')}")
+            time.sleep(2)
+            st.rerun()
+        else:
+            if rerun_task is not None and rerun_task.is_done():
+                if rerun_task.error is not None:
+                    st.error(f"Rerun failed: {rerun_task.error}")
+                else:
+                    updated, failed_cases = rerun_task.result
+                    if updated:
+                        changes = pd.DataFrame(updated).pivot(index="#", columns="field", values=["old", "new"])
+                        changes.columns = [f"{field} ({when})" for when, field in changes.columns]
+                        changes = changes[sorted(changes.columns)]
+                        st.success(f"{changes.shape[0]} ClientServings records updated in place ✅ — now refresh the plating site cache.")
+                        st.dataframe(changes)
+                    if failed_cases:
+                        st.error(f"{len(failed_cases)} problem(s) — these rows were not changed:")
+                        st.write(failed_cases)
+
+            view_input = st.text_input("ClientServings view ID (or the url of the Airtable view)",
+                                       placeholder="viwfdnCtkFK4EGFM4", key="rerun_view_id")
+            view_match = re.search(r"viw[A-Za-z0-9]{14}", view_input or "")
+            if view_input and not view_match:
+                st.warning("That doesn't look like an Airtable view ID (it should start with `viw`).")
+            if st.button("Rerun portioning & update records", disabled=view_match is None, key="rerun_start"):
+                progress = {"status": "Starting…", "done": 0, "failed": 0, "total": 0}
+                st.session_state.rerun_progress = progress
+                task = CancellableTask(MealRecommendation().rerun_portioning_in_place,
+                                       view_match.group(0), progress=progress)
+                task.start()
+                st.session_state.rerun_task = task
                 st.rerun()
 
     # clientservings csv download
