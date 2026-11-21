@@ -10,6 +10,7 @@ import ast
 import json
 from openai import OpenAI
 import os
+import re
 
 # Initialize OpenAI client lazily to avoid issues when running outside Streamlit
 _openai_client = None
@@ -154,6 +155,32 @@ def non_water_ratio(sub_ingredients_breakdown):
 
 
 
+def split_component_names(field_value, known_names):
+    """
+    Split a component column ("A, B, C") into ingredient names.
+
+    The columns are joined with ", ", but some ingredient names contain ", "
+    themselves (e.g. "Cajun Saffron, Tomato & Orange Broth"). A plain split
+    breaks those into pieces that never match the recipe, so the ingredient
+    silently drops off the sheet. Any run of pieces that rejoins into a name in
+    known_names is merged back into one name.
+    """
+    parts = [p.strip() for p in field_value.split(', ') if p.strip()]
+    comma_names = sorted((n for n in known_names if ', ' in n),
+                         key=lambda n: n.count(', '), reverse=True)
+
+    for name in comma_names:
+        pieces = name.split(', ')
+        n = len(pieces)
+        i = 0
+        while i + n <= len(parts):
+            if parts[i:i + n] == pieces:
+                parts[i:i + n] = [name]
+            i += 1
+
+    return parts
+
+
 def group_ingredients_by_component(db,client_servings):
     """Group all ingredients by component type from client servings using Modified Recipe Details"""
     ingredient_summary = {
@@ -200,13 +227,22 @@ def group_ingredients_by_component(db,client_servings):
         if not modified_recipe:
             continue
 
+        # Ingredient names as they appear in the recipe, used to keep names that contain ", " whole
+        recipe_names = {
+            ' '.join(name.split(' ')[1:]).strip().replace('\n', '')
+            for name in modified_recipe
+        }
+
         # Get ingredient names from each component column to determine component mapping
-        starch_names = fields.get('Starch', '').replace('\n', '').split(', ')
-        meat_names = fields.get('Meat', '').replace('\n', '').split(', ')
+        starch_names = split_component_names(fields.get('Starch', '').replace('\n', ''), recipe_names)
+        meat_names = split_component_names(fields.get('Meat', '').replace('\n', ''), recipe_names)
         sauce_field = fields.get('Sauce', '')
-        sauce_names = sauce_field.replace('\n', '').replace(' (2 x sauce)', '').replace(' (3 x sauce)', '').replace(' (4 x sauce)', '').split(', ')
-        garnish_names = fields.get('Garnish', '').replace('\n', '').split(', ')
-        veggie_names = fields.get('Veggies', '').replace('\n', '').split(', ')
+        sauce_names = split_component_names(
+            re.sub(r'\s*\(\d+\s*x\s*sauce\)', '', sauce_field.replace('\n', ''), flags=re.IGNORECASE),
+            recipe_names,
+        )
+        garnish_names = split_component_names(fields.get('Garnish', '').replace('\n', ''), recipe_names)
+        veggie_names = split_component_names(fields.get('Veggies', '').replace('\n', ''), recipe_names)
 
         # Parse sauce multiplier from the original sauce field
         sauce_multiplier = parse_sauce_multiplier(sauce_field)
