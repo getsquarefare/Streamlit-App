@@ -188,10 +188,13 @@ def main():
                 else:
                     updated, failed_cases = rerun_task.result
                     if updated:
-                        changes = pd.DataFrame(updated).pivot(index="#", columns="field", values=["old", "new"])
-                        changes.columns = [f"{field} ({when})" for when, field in changes.columns]
-                        changes = changes[sorted(changes.columns)]
-                        st.success(f"{changes.shape[0]} ClientServings records updated in place ✅ — now refresh the plating site cache.")
+                        updated_df = pd.DataFrame(updated)
+                        changes = updated_df.pivot(index="#", columns="field", values=["old", "new"])
+                        changes = changes.swaplevel(axis=1)[[(f, w) for f in updated_df["field"].unique() for w in ("old", "new")]]
+                        changes.columns = [f"{field} ({when})" for field, when in changes.columns]
+                        st.success(f"{changes.shape[0]} ClientServings records updated in place ✅")
+                        st.warning("Remember to hit **Refresh cache** "
+                                   "on the plating site, or scans will keep showing the old grams.")
                         st.dataframe(changes)
                     if failed_cases:
                         st.error(f"{len(failed_cases)} problem(s) — these rows were not changed:")
